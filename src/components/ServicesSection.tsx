@@ -1,36 +1,26 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Brain, Blocks, Cpu, Users } from "lucide-react";
+import { FileText, Cpu, Building, Workflow } from "lucide-react";
 
 const services = [
   {
     icon: FileText,
-    title: "eInvoicing & Compliance",
-    description: "CFDI, SAF-T, Peppol BIS 3.0 integrations. XML validators and transformations (GUF → CFDI)."
-  },
-  {
-    icon: Brain,
-    title: "AI Consulting",
-    description: "Automating compliance and code validation. Prompt engineering and AI integration into business tools."
-  },
-  {
-    icon: Blocks,
-    title: "Process Consultant",
-    description: "Business process optimization, workflow automation, and operational efficiency improvements."
-  },
-  {
-    icon: Users,
-    title: "Engineering Manager",
-    description: "Team leadership, technical mentoring, sprint planning, and engineering culture development."
+    title: "eInvoicing & AI Compliance",
+    description: "Delivered compliant invoice flows in Mexico, the EU, and LATAM. Expert in CFDI, SAF-T, and Peppol BIS 3.0. Combined rule-based validation and AI-assisted automation to streamline complex eInvoicing pipelines."
   },
   {
     icon: Cpu,
-    title: "Mobile iOS, Embedded & Home Automation",
-    description: "Deep mobile expertise — from reverse-engineering iOS SDK 4.0 and jailbreaking the original iPhone to building firmware, CAN bus systems, and smart home IoT solutions."
+    title: "Mobile & Embedded Systems",
+    description: "Reverse-engineered iOS SDK 4.0 and performed a hardware-level jailbreak on the first iPhone. Led and mentored iOS teams. Built firmware and protocols for embedded systems (CAN bus), and integrated smart home IoT automation."
   },
   {
-    icon: Users,
-    title: "Tech Leadership & Interim CEO",
-    description: "Strategic leadership, business vision, executive management and organizational transformation."
+    icon: Building,
+    title: "Architecture & Interim CEO",
+    description: "15+ years of experience designing scalable platforms and leading engineering teams. Served as Interim CEO during a successful acquisition, overseeing business strategy, team integration, and 50% revenue growth."
+  },
+  {
+    icon: Workflow,
+    title: "Process Optimization & Delivery",
+    description: "Specialized in workflow design, agile delivery, and distributed team operations. I actively experiment with AI tools to optimize business processes, leveraging extensive experience in sprint management, tooling alignment, and delivery flow improvements."
   }
 ];
 
