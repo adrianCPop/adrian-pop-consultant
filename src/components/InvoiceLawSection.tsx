@@ -52,9 +52,43 @@ const actions = [
   { value: "warning", label: "warning" }
 ];
 
+const defaultInvoice = {
+  invoice: {
+    id: "INV-TEST-001",
+    date: "2025-07-20",
+    totalAmount: -50,
+    currency: "EUR",
+    buyer: {
+      name: "Global Distribution Ltd",
+      country: "MX",
+      vatNumber: ""
+    },
+    seller: {
+      name: "Adrian Pop Consulting",
+      country: "ES",
+      vatNumber: "ES987654321"
+    },
+    lineItems: [
+      {
+        description: "Consulting Services",
+        quantity: 5,
+        unitPrice: 200
+      },
+      {
+        description: "AI-based validation setup",
+        quantity: 1,
+        unitPrice: 0
+      }
+    ],
+    paymentMethod: null
+  }
+};
+
 const InvoiceLawSection = () => {
   const [rules, setRules] = useState<Rule[]>([]);
-  const [jsonInput, setJsonInput] = useState("");
+  const [jsonInput, setJsonInput] = useState(
+    JSON.stringify(defaultInvoice, null, 2)
+  );
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
