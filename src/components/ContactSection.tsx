@@ -7,22 +7,64 @@ import { Mail, Linkedin, Send } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
+interface ContactFormData {
+  name: string;
+  email: string;
+  message: string;
+}
+
 const ContactSection = () => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ContactFormData>({
     name: '',
     email: '',
     message: ''
   });
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /**
+   * Sends the contact form data to the Supabase edge function.
+   */
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
-    // Simulate form submission
-    toast({
-      title: "Message sent!",
-      description: "Thank you for your message. I'll get back to you soon.",
-    });
-    setFormData({ name: '', email: '', message: '' });
+
+    try {
+      const res = await fetch('/functions/v1/sendContactEmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          message: formData.message,
+          botField: '',
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      }
+
+      const data: { success: boolean; error?: string } = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error ?? 'Unknown server error');
+      }
+
+      toast({
+        title: 'Message sent!',
+        description: "Thank you for your message. I'll get back to you soon.",
+      });
+      setFormData({ name: '', email: '', message: '' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Contact form error:', err);
+      toast({
+        title: 'Error sending message',
+        description: message ?? 'Something went wrong. Please try again later.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
