@@ -33,7 +33,7 @@ const HeroSection = () => {
           {/* Description */}
           <div className="max-w-3xl mx-auto mb-10">
             <p className="text-lg text-muted-foreground leading-relaxed">
-              I'm Adrian Pop, an experienced software architect and consultant with over 15 years in the IT industry — working since 2006 across embedded systems, mobile apps, enterprise architecture, and eInvoicing platforms.
+              I'm Adrian Pop, an experienced software architect and consultant with over 15 years in IT (working since 2006). I've developed embedded systems, led mobile iOS projects — including reverse-engineering iOS SDK 4.0 and performing a hardware jailbreak on the first iPhone — built enterprise architectures, and delivered eInvoicing solutions.
             </p>
             <p className="text-lg text-muted-foreground leading-relaxed mt-4">
               I help distributed teams implement robust systems, streamline operations, and stay compliant in complex regulatory environments like CFDI (Mexico), Peppol (EU), and SAF-T. My career spans Europe and the Americas, leading teams of 20+ engineers and delivering critical business solutions.

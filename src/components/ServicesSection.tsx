@@ -24,8 +24,8 @@ const services = [
   },
   {
     icon: Cpu,
-    title: "Embedded & Home Automation",
-    description: "CAN bus, firmware, IoT sensors for industry and smart homes. Real-time systems expertise."
+    title: "Mobile iOS, Embedded & Home Automation",
+    description: "Deep mobile expertise — from reverse-engineering iOS SDK 4.0 and jailbreaking the original iPhone to building firmware, CAN bus systems, and smart home IoT solutions."
   },
   {
     icon: Users,
