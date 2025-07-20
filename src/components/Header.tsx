@@ -11,7 +11,7 @@ const Header = () => {
               <Cpu className="w-6 h-6 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
-              Adrian Pop AI Playground
+              Adrian Pop
             </h1>
           </div>
           <LanguageSwitch />

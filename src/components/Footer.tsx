@@ -1,20 +1,37 @@
-import { Code2, Bot } from "lucide-react";
+import LanguageSwitch from "./LanguageSwitch";
+import { Linkedin, Mail } from "lucide-react";
 
 const Footer = () => {
   return (
     <footer className="w-full border-t border-border bg-background/95 backdrop-blur">
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center justify-center space-x-2 text-muted-foreground">
-          <span className="text-sm">Page built with</span>
-          <div className="flex items-center space-x-1">
-            <Code2 className="w-4 h-4" />
-            <span className="text-sm font-medium">Codex</span>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col lg:flex-row items-center justify-between space-y-6 lg:space-y-0">
+          <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
+            <p className="text-sm text-muted-foreground">
+              Built with Codex + GPT-4 by Adrian Pop · © 2025
+            </p>
+            
+            <div className="flex items-center space-x-4">
+              <a 
+                href="mailto:adrian.c.pop@gmail.com"
+                className="text-muted-foreground hover:text-primary transition-colors"
+                aria-label="Email"
+              >
+                <Mail className="w-4 h-4" />
+              </a>
+              <a 
+                href="https://linkedin.com/in/adrian-c-pop"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary transition-colors"
+                aria-label="LinkedIn"
+              >
+                <Linkedin className="w-4 h-4" />
+              </a>
+            </div>
           </div>
-          <span className="text-sm">and</span>
-          <div className="flex items-center space-x-1">
-            <Bot className="w-4 h-4" />
-            <span className="text-sm font-medium">GPT-4</span>
-          </div>
+          
+          <LanguageSwitch />
         </div>
       </div>
     </footer>
