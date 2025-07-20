@@ -15,7 +15,7 @@ const services = [
   {
     icon: Building,
     title: "Architecture & Interim CEO",
-    description: "15+ years of experience designing scalable platforms and leading engineering teams. Served as Interim CEO during a successful acquisition, overseeing business strategy, team integration, and 50% revenue growth."
+    description: "15+ years of experience designing scalable platforms and leading engineering teams. Served as Interim CEO during a successful acquisition, overseeing business strategy and team integration."
   },
   {
     icon: Workflow,
