@@ -101,14 +101,14 @@ const ContactSection = () => {
               </div>
 
               <div className="space-y-4">
-                <a 
-                  href="mailto:adrian.c.pop@gmail.com"
+                <a
+                  href="mailto:contact@adrianpop.tech"
                   className="flex items-center space-x-3 text-foreground hover:text-primary transition-colors"
                 >
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                     <Mail className="w-5 h-5 text-primary" />
                   </div>
-                  <span>adrian.c.pop@gmail.com</span>
+                  <span>contact@adrianpop.tech</span>
                 </a>
 
                 <a 
