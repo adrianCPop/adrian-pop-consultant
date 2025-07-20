@@ -62,6 +62,12 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 5% 90%;
     --sidebar-border: 240 5% 11%;
     --sidebar-ring: 217 91% 60%;
+
+    /* User theme variables */
+    --color-primary: #3c83f6;
+    --color-background: #09090b;
+    --color-text: #fafafa;
+    --color-accent: #16a249;
   }
 
   .light {
@@ -101,6 +107,12 @@ All colors MUST be HSL.
 
     --shadow-glow: 0 0 40px hsl(217 91% 60% / 0.2);
     --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.1), 0 1px 2px 0 hsl(0 0% 0% / 0.06);
+
+    /* User theme variables */
+    --color-primary: #3c83f6;
+    --color-background: #ffffff;
+    --color-text: #0f0f0f;
+    --color-accent: #16a249;
   }
 }
 
