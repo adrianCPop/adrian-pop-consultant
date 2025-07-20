@@ -57,3 +57,5 @@ port = 54330
 
 [functions.validate-rules]
 verify_jwt = false
+[functions.sendContactEmail]
+verify_jwt = false
