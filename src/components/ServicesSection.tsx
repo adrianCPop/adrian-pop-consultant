@@ -14,8 +14,13 @@ const services = [
   },
   {
     icon: Blocks,
-    title: "Software Architecture",
-    description: "Microservices, SaaS systems, platform modernization and scalable enterprise solutions."
+    title: "Process Consultant",
+    description: "Business process optimization, workflow automation, and operational efficiency improvements."
+  },
+  {
+    icon: Users,
+    title: "Engineering Manager",
+    description: "Team leadership, technical mentoring, sprint planning, and engineering culture development."
   },
   {
     icon: Cpu,
@@ -24,8 +29,8 @@ const services = [
   },
   {
     icon: Users,
-    title: "Tech Leadership & Interim CTO",
-    description: "Agile processes, hiring, team coaching, roadmap creation and distributed team management."
+    title: "Tech Leadership & Interim CEO",
+    description: "Strategic leadership, business vision, executive management and organizational transformation."
   }
 ];
 
