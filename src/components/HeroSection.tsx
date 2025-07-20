@@ -23,13 +23,13 @@ const HeroSection = () => {
 
             {/* Subtitle */}
             <p className="text-xl lg:text-2xl text-muted-foreground mb-8 font-medium">
-              Technical consultant for eInvoicing, AI compliance, and scalable software systems.
+              Technical consultant for eInvoicing, AI compliance, and scalable systems.
             </p>
 
             {/* Short Description */}
             <div className="mb-10">
               <p className="text-lg text-muted-foreground leading-relaxed">
-                From reverse-engineering iOS to leading eInvoicing projects across continents — and navigating offshore with calm focus — I help teams simplify and scale their systems.
+                From reverse-engineering iOS to cracking the complexity of global eInvoicing standards — and navigating offshore with calm focus — I help teams simplify and scale their systems.
               </p>
             </div>
 
@@ -62,6 +62,7 @@ const HeroSection = () => {
                 src="/lovable-uploads/0bd02254-2987-4c7d-aa21-15304bc1a3fe.png"
                 alt="Adrian Pop sailing"
                 className="w-full h-auto rounded-lg shadow-elegant object-cover"
+                style={{ imageRendering: 'crisp-edges' }}
               />
             </div>
           </div>
