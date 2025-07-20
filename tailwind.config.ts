@@ -22,12 +22,13 @@ export default {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: 'hsl(var(--background))',
-				foreground: 'hsl(var(--foreground))',
-				primary: {
-					DEFAULT: 'hsl(var(--primary))',
-					foreground: 'hsl(var(--primary-foreground))'
-				},
+                                background: 'var(--color-background)',
+                                foreground: 'var(--color-text)',
+                                text: 'var(--color-text)',
+                                primary: {
+                                        DEFAULT: 'var(--color-primary)',
+                                        foreground: 'var(--color-text)'
+                                },
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))'
@@ -40,10 +41,10 @@ export default {
 					DEFAULT: 'hsl(var(--muted))',
 					foreground: 'hsl(var(--muted-foreground))'
 				},
-				accent: {
-					DEFAULT: 'hsl(var(--accent))',
-					foreground: 'hsl(var(--accent-foreground))'
-				},
+                                accent: {
+                                        DEFAULT: 'var(--color-accent)',
+                                        foreground: 'var(--color-text)'
+                                },
 				popover: {
 					DEFAULT: 'hsl(var(--popover))',
 					foreground: 'hsl(var(--popover-foreground))'
