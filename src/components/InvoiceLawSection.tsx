@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Play, Save, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { logRuleRun } from "@/integrations/supabase/ruleRuns";
 
 interface Rule {
   id: string;
@@ -177,6 +178,14 @@ const InvoiceLawSection = () => {
       toast({
         title: "Validation Complete",
         description: `${data.results.filter((r: any) => r.passed).length}/${data.results.length} rules passed`,
+      });
+
+      // Store the validation run in Supabase
+      await logRuleRun({
+        invoice: JSON.parse(jsonInput),
+        rules,
+        result: data,
+        ...(user ? { user_id: user.id } : {})
       });
 
     } catch (error: any) {
