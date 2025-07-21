@@ -30,7 +30,9 @@ const ContactSection = () => {
     e.preventDefault();
 
     try {
-      const res = await fetch('/functions/v1/sendContactEmail', {
+      const res = await fetch(
+        'https://wvcnymlvoouryxuriqtl.supabase.co/functions/v1/sendContactEmail',
+        {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
