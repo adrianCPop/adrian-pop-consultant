@@ -8,6 +8,7 @@ import { Plus, Trash2, Play, Save, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { logRuleRun } from "@/integrations/supabase/ruleRuns";
+import { VALIDATE_RULES_FN } from "@/integrations/supabase/constants";
 
 interface Rule {
   id: string;
@@ -165,7 +166,7 @@ const InvoiceLawSection = () => {
     setResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('validate-rules', {
+      const { data, error } = await supabase.functions.invoke(VALIDATE_RULES_FN, {
         body: {
           rules,
           invoice: JSON.parse(jsonInput)
