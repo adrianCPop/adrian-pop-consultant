@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import JsonEditor from "@/components/JsonEditor";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Play, Save, CheckCircle, XCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, Trash2, Play, Save, CheckCircle, XCircle, AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { logRuleRun } from "@/integrations/supabase/ruleRuns";
 import { VALIDATE_RULES_FN } from "@/integrations/supabase/constants";
+import { cn } from "@/lib/utils";
 
 interface Rule {
   id: string;
@@ -20,8 +23,16 @@ interface Rule {
 }
 
 interface ValidationResult {
-  success: boolean;
-  results: {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  ruleLog: {
+    rule: number;
+    passed: boolean;
+  }[];
+  // Legacy support
+  success?: boolean;
+  results?: {
     ruleId: string;
     passed: boolean;
     message: string;
@@ -95,7 +106,20 @@ const InvoiceLawSection = () => {
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [debugOpen, setDebugOpen] = useState(false);
   const { toast } = useToast();
+
+  // Helper function to get validation status
+  const getValidationStatus = () => {
+    if (!result) return null;
+    
+    const hasErrors = result.errors?.length > 0 || result.isValid === false;
+    const hasWarnings = result.warnings?.length > 0;
+    
+    if (hasErrors) return { type: 'error', label: '❌ Errors', color: 'destructive' } as const;
+    if (hasWarnings) return { type: 'warning', label: '⚠ Warnings', color: 'secondary' } as const;
+    return { type: 'success', label: '✓ Valid', color: 'default' } as const;
+  };
 
   useEffect(() => {
     // Check for authenticated user
@@ -177,9 +201,18 @@ const InvoiceLawSection = () => {
       if (error) throw error;
       
       setResult(data);
+      
+      // Enhanced toast messaging based on new response format
+      const status = data.isValid ? 
+        (data.warnings?.length > 0 ? "Validation completed with warnings" : "Validation passed") :
+        "Validation failed";
+      
       toast({
-        title: "Validation Complete",
-        description: `${data.results.filter(r => r.passed).length}/${data.results.length} rules passed`,
+        title: status,
+        description: data.isValid ? 
+          `Invoice is valid${data.warnings?.length > 0 ? ` (${data.warnings.length} warnings)` : ''}` :
+          `${data.errors?.length || 0} errors found`,
+        variant: data.isValid ? "default" : "destructive"
       });
 
       // Store the validation run in Supabase
@@ -192,6 +225,12 @@ const InvoiceLawSection = () => {
 
     } catch (error: unknown) {
       console.error("Validation error:", error);
+      setResult({
+        isValid: false,
+        errors: [error instanceof Error ? error.message : "Failed to validate rules"],
+        warnings: [],
+        ruleLog: []
+      });
       toast({
         title: "Validation Failed",
         description:
@@ -340,20 +379,38 @@ const InvoiceLawSection = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <Button
-              onClick={runValidation}
-              disabled={isLoading || rules.length === 0}
-              className="bg-primary hover:bg-primary/90 px-8"
-            >
-              {isLoading ? (
-                "Validating..."
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Run Validation
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={runValidation}
+                disabled={isLoading || rules.length === 0}
+                className="bg-primary hover:bg-primary/90 px-8"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Run Validation
+                  </>
+                )}
+              </Button>
+              
+              {/* Status Badge */}
+              {result && (() => {
+                const status = getValidationStatus();
+                return status ? (
+                  <Badge 
+                    variant={status.color}
+                    className="animate-fade-in transition-all duration-300"
+                  >
+                    {status.label}
+                  </Badge>
+                ) : null;
+              })()}
+            </div>
             
             {user && (
               <Button
@@ -367,47 +424,141 @@ const InvoiceLawSection = () => {
             )}
           </div>
 
-          {/* Results */}
-          {result && (
-            <Card className="bg-card/50 backdrop-blur border-border">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {result.success ? (
-                    <CheckCircle className="w-5 h-5 text-accent" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-destructive" />
-                  )}
-                  Validation Results
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {result.results.map((ruleResult, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        {ruleResult.passed ? (
-                          <CheckCircle className="w-4 h-4 text-accent" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-destructive" />
-                        )}
-                        <code className="text-sm bg-code-bg px-2 py-1 rounded border border-code-border">
-                          Rule {index + 1}
-                        </code>
-                      </div>
-                      <Badge variant={ruleResult.passed ? "default" : "destructive"}>
-                        {ruleResult.passed ? "PASSED" : "FAILED"}
-                      </Badge>
-                    </div>
-                  ))}
-                  
-                  {result.error && (
-                    <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                      <p className="text-destructive text-sm">{result.error}</p>
-                    </div>
-                  )}
+          {/* Loading Skeleton */}
+          {isLoading && (
+            <Card className="bg-card/50 backdrop-blur border-border animate-fade-in">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center space-x-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  <span className="text-muted-foreground">Running validation...</span>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <div className="h-4 bg-muted animate-pulse rounded" />
+                  <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
+                  <div className="h-4 bg-muted animate-pulse rounded w-1/2" />
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Results */}
+          {result && !isLoading && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Error Modal-like Display */}
+              {(result.errors?.length > 0 || result.isValid === false) && (
+                <Alert className="border-destructive bg-destructive/10 animate-scale-in">
+                  <XCircle className="h-4 w-4 text-destructive" />
+                  <AlertDescription className="text-destructive">
+                    <div className="font-medium mb-2">Validation Failed</div>
+                    <ul className="space-y-1 text-sm">
+                      {result.errors?.map((error, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="w-1 h-1 bg-destructive rounded-full mt-2 flex-shrink-0" />
+                          {error}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Warning Banner */}
+              {result.isValid && result.warnings?.length > 0 && (
+                <Alert className="border-yellow-500 bg-yellow-500/10 animate-scale-in">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                    <div className="font-medium mb-2">Validation Passed with Warnings</div>
+                    <ul className="space-y-1 text-sm">
+                      {result.warnings.map((warning, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="w-1 h-1 bg-yellow-600 rounded-full mt-2 flex-shrink-0" />
+                          {warning}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Success Message */}
+              {result.isValid && (!result.warnings || result.warnings.length === 0) && (
+                <Alert className="border-green-500 bg-green-500/10 animate-scale-in">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800 dark:text-green-200">
+                    <div className="font-medium">Validation Passed</div>
+                    <p className="text-sm mt-1">All rules passed successfully!</p>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Rule Log Debug Section */}
+              {result.ruleLog && result.ruleLog.length > 0 && (
+                <Collapsible open={debugOpen} onOpenChange={setDebugOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-between hover:bg-muted/50"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs font-mono">DEBUG</span>
+                        Rule Execution Log
+                      </span>
+                      <ChevronDown className={cn(
+                        "h-4 w-4 transition-transform duration-200",
+                        debugOpen && "rotate-180"
+                      )} />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-2 mt-4">
+                    <Card className="bg-code-bg border-code-border">
+                      <CardContent className="p-4">
+                        <pre className="text-xs overflow-x-auto">
+                          {JSON.stringify(result.ruleLog, null, 2)}
+                        </pre>
+                      </CardContent>
+                    </Card>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {/* Legacy Results Support */}
+              {result.results && (
+                <Card className="bg-card/50 backdrop-blur border-border">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {result.success ? (
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-destructive" />
+                      )}
+                      Legacy Validation Results
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {result.results.map((ruleResult, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            {ruleResult.passed ? (
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-destructive" />
+                            )}
+                            <code className="text-sm bg-code-bg px-2 py-1 rounded border border-code-border">
+                              Rule {index + 1}
+                            </code>
+                          </div>
+                          <Badge variant={ruleResult.passed ? "default" : "destructive"}>
+                            {ruleResult.passed ? "PASSED" : "FAILED"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           )}
         </div>
       </div>
