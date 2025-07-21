@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import JsonEditor from "@/components/JsonEditor";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Play, Save, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -323,22 +323,11 @@ const InvoiceLawSection = () => {
                 <CardTitle className="text-foreground">Invoice JSON Data</CardTitle>
               </CardHeader>
               <CardContent>
-                <Textarea
-                  placeholder='Enter your invoice JSON here, e.g.:
-{
-  "documentType": "invoice",
-  "totalAmount": 1000.00,
-  "currencyCode": "EUR",
-  "invoiceNumber": "INV-2024-001",
-  "issueDate": "2024-01-15",
-  "supplierName": "ACME Corp",
-  "buyerName": "Example Ltd",
-  "taxAmount": 200.00,
-  "netAmount": 800.00
-}'
+                <JsonEditor
+                  placeholder={`Enter your invoice JSON here, e.g.:\n{\n  "documentType": "invoice",\n  "totalAmount": 1000.00,\n  "currencyCode": "EUR",\n  "invoiceNumber": "INV-2024-001",\n  "issueDate": "2024-01-15",\n  "supplierName": "ACME Corp",\n  "buyerName": "Example Ltd",\n  "taxAmount": 200.00,\n  "netAmount": 800.00\n}`}
                   value={jsonInput}
-                  onChange={(e) => setJsonInput(e.target.value)}
-                  className="min-h-[300px] font-mono text-sm bg-code-bg border-code-border"
+                  onChange={setJsonInput}
+                  className="min-h-[300px]"
                 />
               </CardContent>
             </Card>
