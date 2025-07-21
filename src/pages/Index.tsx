@@ -3,10 +3,10 @@ import Footer from "@/components/Footer";
 import HeroSection from "@/components/HeroSection";
 import ServicesSection from "@/components/ServicesSection";
 import TestimonialsSection from "@/components/TestimonialsSection";
-
 import PublicationsSection from "@/components/PublicationsSection";
 import ContactSection from "@/components/ContactSection";
 import InvoiceLawSection from "@/components/InvoiceLawSection";
+import CookieConsent from "@/components/CookieConsent";
 
 const Index = () => {
   return (
@@ -24,6 +24,7 @@ const Index = () => {
       </main>
 
       <Footer />
+      <CookieConsent />
     </div>
   );
 };

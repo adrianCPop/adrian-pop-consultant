@@ -1,4 +1,5 @@
 import LanguageSwitch from "./LanguageSwitch";
+import ThemeSelector from "./ThemeSelector";
 import { Cpu } from "lucide-react";
 
 const Header = () => {
@@ -14,7 +15,10 @@ const Header = () => {
               Adrian Pop
             </h1>
           </div>
-          <LanguageSwitch />
+          <div className="flex items-center gap-2">
+            <ThemeSelector />
+            <LanguageSwitch />
+          </div>
         </div>
       </div>
     </header>
