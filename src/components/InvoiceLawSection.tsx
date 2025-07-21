@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { User } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -93,7 +94,7 @@ const InvoiceLawSection = () => {
   );
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -178,7 +179,7 @@ const InvoiceLawSection = () => {
       setResult(data);
       toast({
         title: "Validation Complete",
-        description: `${data.results.filter((r: any) => r.passed).length}/${data.results.length} rules passed`,
+        description: `${data.results.filter(r => r.passed).length}/${data.results.length} rules passed`,
       });
 
       // Store the validation run in Supabase
@@ -189,12 +190,15 @@ const InvoiceLawSection = () => {
         ...(user ? { user_id: user.id } : {})
       });
 
-    } catch (error: any) {
-      console.error('Validation error:', error);
+    } catch (error: unknown) {
+      console.error("Validation error:", error);
       toast({
         title: "Validation Failed",
-        description: error.message || "Failed to validate rules",
-        variant: "destructive"
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to validate rules",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
