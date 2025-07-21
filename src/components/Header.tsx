@@ -1,8 +1,10 @@
 import LanguageSwitch from "./LanguageSwitch";
 import ThemeSelector from "./ThemeSelector";
 import { Cpu } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const Header = () => {
+  const { t } = useTranslation();
   return (
     <header className="w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 py-4">
@@ -12,7 +14,7 @@ const Header = () => {
               <Cpu className="w-6 h-6 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
-              Adrian Pop
+              {t('header.title')}
             </h1>
           </div>
           <div className="flex items-center gap-2">

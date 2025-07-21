@@ -1,30 +1,32 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Cpu, Building, Workflow } from "lucide-react";
-
-const services = [
-  {
-    icon: FileText,
-    title: "eInvoicing & AI Compliance",
-    description: "Delivered compliant invoice flows in Mexico, the EU, and LATAM. Expert in CFDI, SAF-T, and Peppol BIS 3.0. Combined rule-based validation and AI-assisted automation to streamline complex eInvoicing pipelines."
-  },
-  {
-    icon: Cpu,
-    title: "Mobile & Embedded Systems",
-    description: "Reverse-engineered iOS SDK 4.0 and performed a hardware-level jailbreak on the first iPhone. Led and mentored iOS teams. Built firmware and protocols for embedded systems (CAN bus), and integrated smart home IoT automation."
-  },
-  {
-    icon: Building,
-    title: "Architecture & Interim CEO",
-    description: "15+ years of experience designing scalable platforms and leading engineering teams. Served as Interim CEO during a successful acquisition, overseeing business strategy and team integration."
-  },
-  {
-    icon: Workflow,
-    title: "Process Optimization & Delivery",
-    description: "Specialized in workflow design, agile delivery, and distributed team operations. I actively experiment with AI tools to optimize business processes, leveraging extensive experience in sprint management, tooling alignment, and delivery flow improvements."
-  }
-];
+import { useTranslation } from "@/hooks/useTranslation";
 
 const ServicesSection = () => {
+  const { t } = useTranslation();
+  
+  const services = [
+    {
+      icon: FileText,
+      title: t('services.einvoicing.title'),
+      description: t('services.einvoicing.description')
+    },
+    {
+      icon: Cpu,
+      title: t('services.mobile.title'),
+      description: t('services.mobile.description')
+    },
+    {
+      icon: Building,
+      title: t('services.architecture.title'),
+      description: t('services.architecture.description')
+    },
+    {
+      icon: Workflow,
+      title: t('services.process.title'),
+      description: t('services.process.description')
+    }
+  ];
   return (
     <section id="services" className="py-20 bg-secondary/30">
       <div className="container mx-auto px-4">
@@ -32,10 +34,10 @@ const ServicesSection = () => {
           {/* Section Header */}
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-              What I Do
+              {t('services.title')}
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Comprehensive IT consulting services spanning architecture, compliance, AI integration, and team leadership.
+              {t('services.description')}
             </p>
           </div>
 

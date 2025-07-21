@@ -1,7 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Quote } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const TestimonialsSection = () => {
+  const { t } = useTranslation();
   return (
     <section id="testimonials" className="py-20">
       <div className="container mx-auto px-4">
@@ -9,10 +11,10 @@ const TestimonialsSection = () => {
           {/* Section Header */}
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-              What People Say
+              {t('testimonials.title')}
             </h2>
             <p className="text-lg text-muted-foreground">
-              Feedback from colleagues and clients who have worked with me directly.
+              {t('testimonials.description')}
             </p>
           </div>
 
@@ -27,19 +29,19 @@ const TestimonialsSection = () => {
 
                 {/* Testimonial Text */}
                 <blockquote className="text-lg lg:text-xl text-foreground leading-relaxed mb-8 italic">
-                  "Adrian came on board to help us manage our development process in our distributed team working only remotely and geographically dispersed. Adrian has brought structure, method and overview to our backlog and his management of the team has been invaluable. Adrian is experienced, competent and pleasant and his calm and efficient management of the board, the team and the sprints has been impressive. If you get a chance to work with Adrian, you should grab it!"
+                  "{t('testimonials.quote')}"
                 </blockquote>
 
                 {/* Attribution */}
                 <div className="text-center">
                   <div className="font-semibold text-foreground text-lg mb-1">
-                    Lars Kjærsgaard
+                    {t('testimonials.author')}
                   </div>
                   <div className="text-muted-foreground">
-                    Chief Architect @ hopp tech ltd
+                    {t('testimonials.role')}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    (Managed Adrian directly, August 2024)
+                    {t('testimonials.date')}
                   </div>
                 </div>
               </div>

@@ -1,16 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Globe } from "lucide-react";
-import { useState } from "react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface LanguageSwitchProps {
   className?: string;
 }
 
 const LanguageSwitch = ({ className }: LanguageSwitchProps) => {
-  const [language, setLanguage] = useState<'EN' | 'RO'>('EN');
+  const { language, setLanguage } = useTranslation();
 
   const toggleLanguage = () => {
-    setLanguage(prev => prev === 'EN' ? 'RO' : 'EN');
+    setLanguage(language === 'EN' ? 'RO' : 'EN');
   };
 
   return (

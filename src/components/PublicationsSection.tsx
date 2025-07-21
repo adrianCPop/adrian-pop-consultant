@@ -1,15 +1,17 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ExternalLink, BookOpen } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const PublicationsSection = () => {
+  const { t } = useTranslation();
   return (
     <section className="py-20 px-4 max-w-6xl mx-auto">
       <div className="text-center mb-16">
         <h2 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent">
-          Publications
+          {t('publications.title')}
         </h2>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Articole publicate
+          {t('publications.description')}
         </p>
       </div>
 
@@ -25,10 +27,10 @@ const PublicationsSection = () => {
               
               <div className="flex-1">
                 <h3 className="text-xl font-semibold mb-2 text-foreground">
-                  "Strengths‑Based Development: A Long‑Term Strategy for Software Teams"
+                  "{t('publications.article.title')}"
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Medium • March 2023 / martie 2023
+                  {t('publications.article.date')}
                 </p>
                 <a 
                   href="https://medium.com/@adrian.c.pop/strengths-based-development-a-long-term-strategy-for-software-teams-c5dce95bcb7a"
@@ -36,7 +38,7 @@ const PublicationsSection = () => {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-medium"
                 >
-                  Read Article
+                  {t('publications.readArticle')}
                   <ExternalLink className="w-4 h-4" />
                 </a>
               </div>

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Linkedin, Send } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/hooks/useTranslation";
 import { SUPABASE_URL } from "@/integrations/supabase/constants";
 
 interface ContactFormData {
@@ -15,6 +16,7 @@ interface ContactFormData {
 }
 
 const ContactSection = () => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<ContactFormData>({
     name: '',
     email: '',
@@ -55,16 +57,16 @@ const ContactSection = () => {
       }
 
       toast({
-        title: 'Message sent!',
-        description: "Thank you for your message. I'll get back to you soon.",
+        title: t('contact.success.title'),
+        description: t('contact.success.description'),
       });
       setFormData({ name: '', email: '', message: '' });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('Contact form error:', err);
       toast({
-        title: 'Error sending message',
-        description: message ?? 'Something went wrong. Please try again later.',
+        title: t('contact.error.title'),
+        description: t('contact.error.description'),
         variant: 'destructive',
       });
     }
@@ -84,10 +86,10 @@ const ContactSection = () => {
           {/* Section Header */}
           <div className="text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-              Let's Talk
+              {t('contact.title')}
             </h2>
             <p className="text-lg text-muted-foreground">
-              Ready to discuss your project? Get in touch and let's explore how I can help.
+              {t('contact.description')}
             </p>
           </div>
 
@@ -96,10 +98,10 @@ const ContactSection = () => {
             <div className="space-y-6">
               <div>
                 <h3 className="text-xl font-semibold text-foreground mb-4">
-                  Get in Touch
+                  {t('contact.getInTouch')}
                 </h3>
                 <p className="text-muted-foreground mb-6">
-                  I'm always interested in discussing new opportunities and interesting projects. Feel free to reach out!
+                  {t('contact.intro')}
                 </p>
               </div>
 
@@ -131,12 +133,12 @@ const ContactSection = () => {
             {/* Contact Form */}
             <Card className="bg-card/50 backdrop-blur border-border">
               <CardHeader>
-                <CardTitle className="text-foreground">Send a Message</CardTitle>
+                <CardTitle className="text-foreground">{t('contact.form.title')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label htmlFor="name" className="text-foreground">Name</Label>
+                    <Label htmlFor="name" className="text-foreground">{t('contact.form.name')}</Label>
                     <Input
                       id="name"
                       name="name"
@@ -149,7 +151,7 @@ const ContactSection = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="email" className="text-foreground">Email</Label>
+                    <Label htmlFor="email" className="text-foreground">{t('contact.form.email')}</Label>
                     <Input
                       id="email"
                       name="email"
@@ -162,7 +164,7 @@ const ContactSection = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="message" className="text-foreground">Message</Label>
+                    <Label htmlFor="message" className="text-foreground">{t('contact.form.message')}</Label>
                     <Textarea
                       id="message"
                       name="message"
@@ -179,7 +181,7 @@ const ContactSection = () => {
                     className="w-full bg-gradient-primary hover:shadow-glow transition-all duration-300"
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    Send Message
+                    {t('contact.form.send')}
                   </Button>
                 </form>
               </CardContent>

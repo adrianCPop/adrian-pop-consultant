@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Eye } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const HeroSection = () => {
+  const { t } = useTranslation();
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     element?.scrollIntoView({ behavior: 'smooth' });
@@ -15,21 +17,21 @@ const HeroSection = () => {
           <div className="lg:col-span-3">
             {/* Main Title */}
             <h1 className="text-4xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
-              Adrian Pop –{" "}
+              {t('hero.title')}{" "}
               <span className="bg-gradient-primary bg-clip-text text-transparent">
-                Navigating Complexity with Clarity
+                {t('hero.titleHighlight')}
               </span>
             </h1>
 
             {/* Subtitle */}
             <p className="text-xl lg:text-2xl text-muted-foreground mb-8 font-medium">
-              Technical consultant for eInvoicing, AI compliance, and scalable systems.
+              {t('hero.subtitle')}
             </p>
 
             {/* Short Description */}
             <div className="mb-10">
               <p className="text-lg text-muted-foreground leading-relaxed">
-                From reverse-engineering iOS to cracking the complexity of global eInvoicing standards — and navigating offshore with calm focus — I help teams simplify and scale their systems.
+                {t('hero.description')}
               </p>
             </div>
 
@@ -40,7 +42,7 @@ const HeroSection = () => {
                 onClick={() => scrollToSection('contact')}
                 className="bg-gradient-primary hover:shadow-glow transition-all duration-300"
               >
-                Let's Talk
+                {t('hero.ctaPrimary')}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
               <Button 
@@ -49,7 +51,7 @@ const HeroSection = () => {
                 onClick={() => scrollToSection('services')}
                 className="border-border hover:bg-accent hover:text-accent-foreground"
               >
-                See My Work
+                {t('hero.ctaSecondary')}
                 <Eye className="w-4 h-4 ml-2" />
               </Button>
             </div>

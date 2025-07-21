@@ -1,14 +1,16 @@
 import LanguageSwitch from "./LanguageSwitch";
 import { Linkedin, Mail } from "lucide-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const Footer = () => {
+  const { t } = useTranslation();
   return (
     <footer className="w-full border-t border-border bg-background/95 backdrop-blur">
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row items-center justify-between space-y-6 lg:space-y-0">
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
             <p className="text-sm text-muted-foreground">
-              Built with Codex + GPT-4 by Adrian Pop · © 2025
+              {t('footer.copyright')}
             </p>
             
             <div className="flex items-center space-x-4">
