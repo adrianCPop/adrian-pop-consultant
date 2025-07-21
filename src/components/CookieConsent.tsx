@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { X, Cookie, Shield, Settings } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 
 const CONSENT_KEY = "cookie_consent";
@@ -124,6 +124,9 @@ const CookieConsent = () => {
                       <Shield className="h-5 w-5" />
                       Privacy Settings
                     </DialogTitle>
+                    <DialogDescription>
+                      Manage your cookie preferences and data processing consent.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 pt-4">
                     <div className="space-y-3">
