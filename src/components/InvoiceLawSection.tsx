@@ -296,46 +296,52 @@ const InvoiceLawSection = () => {
                 ) : (
                   rules.map((rule) => (
                     <div key={rule.id} className="p-4 border border-border rounded-lg space-y-3">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>if</span>
-                        <Select value={rule.field} onValueChange={(value) => updateRule(rule.id, 'field', value)}>
-                          <SelectTrigger className="w-32">
-                            <SelectValue placeholder="field" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {fields.map(field => (
-                              <SelectItem key={field} value={field}>{field}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      {/* If clause - responsive layout */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                          <span className="shrink-0">if</span>
+                          <Select value={rule.field} onValueChange={(value) => updateRule(rule.id, 'field', value)}>
+                            <SelectTrigger className="w-full sm:w-32">
+                              <SelectValue placeholder="field" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {fields.map(field => (
+                                <SelectItem key={field} value={field}>{field}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         
-                        <Select value={rule.operator} onValueChange={(value) => updateRule(rule.id, 'operator', value)}>
-                          <SelectTrigger className="w-36">
-                            <SelectValue placeholder="operator" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {operators.map(op => (
-                              <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        
-                        {rule.operator !== "notEmpty" && (
-                          <input
-                            type="text"
-                            placeholder="value"
-                            value={rule.value}
-                            onChange={(e) => updateRule(rule.id, 'value', e.target.value)}
-                            className="flex-1 px-3 py-2 text-sm bg-background border border-input rounded-md"
-                          />
-                        )}
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                          <Select value={rule.operator} onValueChange={(value) => updateRule(rule.id, 'operator', value)}>
+                            <SelectTrigger className="w-full sm:w-36">
+                              <SelectValue placeholder="operator" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {operators.map(op => (
+                                <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          
+                          {rule.operator !== "notEmpty" && (
+                            <input
+                              type="text"
+                              placeholder="value"
+                              value={rule.value}
+                              onChange={(e) => updateRule(rule.id, 'value', e.target.value)}
+                              className="w-full sm:flex-1 px-3 py-2 text-sm bg-background border border-input rounded-md"
+                            />
+                          )}
+                        </div>
                       </div>
                       
-                      <div className="flex items-center justify-between">
+                      {/* Then clause - responsive layout */}
+                      <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>then</span>
+                          <span className="shrink-0">then</span>
                           <Select value={rule.action} onValueChange={(value) => updateRule(rule.id, 'action', value)}>
-                            <SelectTrigger className="w-24">
+                            <SelectTrigger className="w-full sm:w-24">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
