@@ -12,8 +12,8 @@ const Footer = () => {
             </p>
             
             <div className="flex items-center space-x-4">
-              <a 
-                href="mailto:adrian.c.pop@gmail.com"
+              <a
+                href="mailto:contact@adrianpop.tech"
                 className="text-muted-foreground hover:text-primary transition-colors"
                 aria-label="Email"
               >
