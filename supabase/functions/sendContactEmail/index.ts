@@ -114,7 +114,7 @@ serve(async (req) => {
     },
     body: JSON.stringify({
       from: "Contact Form <no-reply@adrianpop.tech>",
-      to: "contact@adrianpop.tech",
+      to: "adrian.c.pop@gmail.com",
       subject: `New message from ${sanitizedName}`,
       html: `<p><strong>Name:</strong> ${sanitizedName}</p><p><strong>Email:</strong> ${sanitizedEmail}</p><p><strong>Message:</strong><br/>${sanitizedMessage}</p>`,
     }),
