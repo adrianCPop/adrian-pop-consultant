@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Linkedin, Send } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { SUPABASE_URL } from "@/integrations/supabase/constants";
 
 interface ContactFormData {
   name: string;
@@ -30,16 +31,18 @@ const ContactSection = () => {
     e.preventDefault();
 
     try {
-      const res = await fetch('/functions/v1/sendContactEmail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          message: formData.message,
-          botField: '',
-        }),
-      });
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/sendContactEmail`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            message: formData.message,
+            botField: '',
+          }),
+        });
 
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);
