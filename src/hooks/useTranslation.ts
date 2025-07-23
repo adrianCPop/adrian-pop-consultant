@@ -90,29 +90,6 @@ const translations = {
     'contact.error.title': 'Error sending message',
     'contact.error.description': 'Something went wrong. Please try again later.',
     
-    // Reverse Engineering Section
-    'reverseEngineering.title': 'iOS, Disassembly & Hardware Hacking',
-    'reverseEngineering.description': 'With 9+ years of iOS experience, I\'ve reverse-engineered the iOS 4.0 SDK, jailbroken the original iPhone, and delivered 10+ App Store apps across industries. I led an iOS department from 0 to 8 developers, codified processes, and shipped crash-free releases that reached top ratings.',
-    
-    // Embedded Systems Section
-    'embeddedSystems.title': 'From Microcontrollers to Protocol Layers',
-    'embeddedSystems.description': 'In my early career, I wrote embedded firmware for agricultural machinery, implemented ISO 11783, and developed CAN bus protocol layers in C. I tested code directly on target hardware, working with ARM processors and debugging at register level.',
-    
-    // Leadership Section
-    'leadership.title': 'Interim CEO, Real Results',
-    'leadership.description': 'As interim CEO of CoreBuild, I led key negotiations with clients, managed company-wide hiring, and orchestrated the integration between CoreBuild and its acquiring partner. I unified sales, technical, and support teams during this transition and contributed directly to a 50% increase in revenue and customer base within the first year. I also defined strategic roadmaps and aligned hiring, delivery, and financial operations to support long-term goals.',
-    
-    // End-to-End Section
-    'endToEnd.title': 'From code to boardroom',
-    'endToEnd.journey.reverseEngineering.from': 'Reverse-engineered SDKs',
-    'endToEnd.journey.reverseEngineering.to': 'delivered App Store apps',
-    'endToEnd.journey.compliance.from': 'Designed compliance flows',
-    'endToEnd.journey.compliance.to': 'integrated CFDI 4.0',
-    'endToEnd.journey.leadership.from': 'Led sprints',
-    'endToEnd.journey.leadership.to': 'chaired board meetings',
-    'endToEnd.journey.technical.from': 'Built firmware',
-    'endToEnd.journey.technical.to': 'scaled SaaS teams',
-    
     // Footer
     'footer.copyright': 'Built with Codex + GPT-4 by Adrian Pop · © 2025',
     
@@ -231,29 +208,6 @@ const translations = {
     'contact.success.description': 'Mulțumesc pentru mesajul tău. Îți voi răspunde în curând.',
     'contact.error.title': 'Eroare la trimiterea mesajului',
     'contact.error.description': 'Ceva nu a mers bine. Te rog încearcă din nou mai târziu.',
-    
-    // Reverse Engineering Section
-    'reverseEngineering.title': 'iOS, Disassembly & Hardware Hacking',
-    'reverseEngineering.description': 'Cu 9+ ani de experiență iOS, am practicat ingineria inversă pe iOS 4.0 SDK, am făcut jailbreak pe primul iPhone, și am livrat 10+ aplicații App Store în diverse industrii. Am condus un departament iOS de la 0 la 8 dezvoltatori, am codificat procese, și am livrat release-uri fără crash-uri care au atins rating-uri de top.',
-    
-    // Embedded Systems Section
-    'embeddedSystems.title': 'De la Microcontrolere la Straturi de Protocol',
-    'embeddedSystems.description': 'În primii ani ai carierei mele, am scris firmware embedded pentru utilaje agricole, am implementat ISO 11783, și am dezvoltat straturi de protocol CAN bus în C. Am testat codul direct pe hardware-ul țintă, lucrând cu procesoare ARM și debugging la nivel de registru.',
-    
-    // Leadership Section
-    'leadership.title': 'CEO Interimar, Rezultate Reale',
-    'leadership.description': 'Ca CEO interimar al CoreBuild, am condus negocieri cheie cu clienții, am gestionat angajările la nivel de companie, și am orchestrat integrarea între CoreBuild și partenerul său de achiziție. Am unificat echipele de vânzări, tehnice și de suport în timpul acestei tranziții și am contribuit direct la o creștere de 50% a veniturilor și bazei de clienți în primul an. Am definit, de asemenea, foile de parcurs strategice și am aliniat operațiunile de angajare, livrare și financiare pentru a susține obiectivele pe termen lung.',
-    
-    // End-to-End Section
-    'endToEnd.title': 'De la cod la sala de consiliu',
-    'endToEnd.journey.reverseEngineering.from': 'Inginerie inversă SDK-uri',
-    'endToEnd.journey.reverseEngineering.to': 'aplicații App Store livrate',
-    'endToEnd.journey.compliance.from': 'Fluxuri de conformitate proiectate',
-    'endToEnd.journey.compliance.to': 'CFDI 4.0 integrat',
-    'endToEnd.journey.leadership.from': 'Sprint-uri conduse',
-    'endToEnd.journey.leadership.to': 'ședințe de consiliu prezidiate',
-    'endToEnd.journey.technical.from': 'Firmware construit',
-    'endToEnd.journey.technical.to': 'echipe SaaS scalate',
     
     // Footer
     'footer.copyright': 'Creat cu Codex + GPT-4 de Adrian Pop · © 2025',
