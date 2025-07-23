@@ -127,6 +127,21 @@ const translations = {
     'cookie.disclaimer': 'Data is stored locally and processed according to GDPR guidelines. You can change these preferences anytime.',
     'cookie.savePreferences': 'Save Preferences',
     'cookie.cancel': 'Cancel',
+    
+    // Fiscal Alerts
+    'fiscalAlerts.title': 'Fiscal Compliance Monitor',
+    'fiscalAlerts.subtitle': 'Automated monitoring of tax regulation changes in countries relevant for unified commerce platforms',
+    'fiscalAlerts.filters': 'Filters',
+    'fiscalAlerts.selectCountry': 'Select country',
+    'fiscalAlerts.allCountries': 'All countries',
+    'fiscalAlerts.showing': 'Showing',
+    'fiscalAlerts.alerts': 'alerts',
+    'fiscalAlerts.summary': 'Key Points',
+    'fiscalAlerts.impact': 'Impact Analysis',
+    'fiscalAlerts.noResults': 'No alerts found',
+    'fiscalAlerts.noResultsDescription': 'Try adjusting your filters to see more results.',
+    'fiscalAlerts.myWork': 'My Work',
+    'fiscalAlerts.fiscalAlertsNav': 'Fiscal Alerts',
   },
   RO: {
     // Header
@@ -246,6 +261,21 @@ const translations = {
     'cookie.disclaimer': 'Datele sunt stocate local și procesate conform ghidurilor GDPR. Puteți schimba aceste preferințe oricând.',
     'cookie.savePreferences': 'Salvează Preferințele',
     'cookie.cancel': 'Anulează',
+    
+    // Fiscal Alerts
+    'fiscalAlerts.title': 'Monitor de Conformitate Fiscală',
+    'fiscalAlerts.subtitle': 'Monitorizarea automată a schimbărilor de reglementări fiscale în țările relevante pentru platformele de comerț unificat',
+    'fiscalAlerts.filters': 'Filtre',
+    'fiscalAlerts.selectCountry': 'Selectează țara',
+    'fiscalAlerts.allCountries': 'Toate țările',
+    'fiscalAlerts.showing': 'Se afișează',
+    'fiscalAlerts.alerts': 'alerte',
+    'fiscalAlerts.summary': 'Puncte Cheie',
+    'fiscalAlerts.impact': 'Analiza Impactului',
+    'fiscalAlerts.noResults': 'Nu s-au găsit alerte',
+    'fiscalAlerts.noResultsDescription': 'Încearcă să ajustezi filtrele pentru a vedea mai multe rezultate.',
+    'fiscalAlerts.myWork': 'Lucrul Meu',
+    'fiscalAlerts.fiscalAlertsNav': 'Alerte Fiscale',
   }
 };
 

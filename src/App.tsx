@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ThemeEditor from "./pages/ThemeEditor";
+import FiscalAlerts from "./pages/FiscalAlerts";
 import { TranslationProvider } from "@/components/TranslationProvider";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/fiscal-alerts" element={<FiscalAlerts />} />
           <Route path="/theme-editor" element={<ThemeEditor />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
