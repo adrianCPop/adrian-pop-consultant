@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contact_submissions: {
+        Row: {
+          email: string
+          id: number
+          message: string
+          name: string
+          submitted_at: string | null
+        }
+        Insert: {
+          email: string
+          id?: never
+          message: string
+          name: string
+          submitted_at?: string | null
+        }
+        Update: {
+          email?: string
+          id?: never
+          message?: string
+          name?: string
+          submitted_at?: string | null
+        }
+        Relationships: []
+      }
+      fiscal_alerts: {
+        Row: {
+          ai_impact_analysis: string
+          ai_summary: string
+          country: string
+          created_at: string
+          id: string
+          published_date: string
+          source: string
+          title: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          ai_impact_analysis: string
+          ai_summary: string
+          country: string
+          created_at?: string
+          id?: string
+          published_date: string
+          source: string
+          title: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          ai_impact_analysis?: string
+          ai_summary?: string
+          country?: string
+          created_at?: string
+          id?: string
+          published_date?: string
+          source?: string
+          title?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      rule_runs: {
+        Row: {
+          created_at: string | null
+          id: string
+          invoice: Json
+          result: Json
+          rules: Json
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          invoice: Json
+          result: Json
+          rules: Json
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          invoice?: Json
+          result?: Json
+          rules?: Json
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
