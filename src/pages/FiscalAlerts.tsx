@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Calendar, Filter, ExternalLink, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +18,10 @@ interface FiscalAlert {
   published_date: string;
   ai_summary: string;
   ai_impact_analysis: string;
+  fiscal_alerts_analysis: {
+    topic: string;
+    details: string;
+  }[];
 }
 
 const getCountryFlag = (country: string): string => {
@@ -61,17 +64,18 @@ const FiscalAlerts = () => {
   const fetchAlerts = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('fiscal_alerts')
-        .select('*')
-        .order('published_date', { ascending: false });
+      const response = await fetch('https://wvcnymlvoouryxuriqtl.supabase.co/functions/v1/get-fiscal-alerts', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (error) {
-        console.error('Error fetching fiscal alerts:', error);
-        return;
+      if (!response.ok) {
+        throw new Error('Failed to fetch fiscal alerts');
       }
 
-      const alertsData = data || [];
+      const alertsData: FiscalAlert[] = await response.json();
       setAlerts(alertsData);
       
       // Extract unique countries for filter
@@ -193,6 +197,11 @@ const FiscalAlerts = () => {
                           <ExternalLink className="w-4 h-4 mt-1 flex-shrink-0" />
                         </a>
                       </CardTitle>
+                      {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 && (
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {alert.fiscal_alerts_analysis.length} impact{alert.fiscal_alerts_analysis.length !== 1 ? 's' : ''}
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -226,9 +235,24 @@ const FiscalAlerts = () => {
                           {t('fiscalAlerts.impact')}
                         </h4>
                       </div>
-                      <p className="text-sm text-foreground/80">
-                        {alert.ai_impact_analysis}
-                      </p>
+                      {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 ? (
+                        <div className="space-y-3">
+                          {alert.fiscal_alerts_analysis.map((analysis, index) => (
+                            <div key={index} className="space-y-1">
+                              <h5 className="font-medium text-foreground text-sm">
+                                {analysis.topic}
+                              </h5>
+                              <p className="text-sm text-foreground/80">
+                                {analysis.details}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-foreground/80">
+                          {alert.ai_impact_analysis}
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
