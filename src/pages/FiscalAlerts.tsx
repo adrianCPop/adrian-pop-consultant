@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, Filter, ExternalLink, AlertTriangle } from "lucide-react";
+import { Calendar, Filter, ExternalLink, AlertTriangle, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/useTranslation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -229,35 +230,40 @@ const FiscalAlerts = () => {
                     </div>
                     
                     {/* Impact Analysis */}
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 rounded-r">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                        <h4 className="font-semibold text-foreground">
-                          {t('fiscalAlerts.impact')}
-                        </h4>
-                      </div>
-                      {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 ? (
-                        <ul className="space-y-3">
-                          {alert.fiscal_alerts_analysis.map((analysis, index) => (
-                            <li key={index} className="flex items-start space-x-2">
-                              <span className="text-yellow-600 mt-1">•</span>
-                              <div className="space-y-1">
-                                <h5 className="font-bold text-foreground text-sm">
-                                  {analysis.topic}
-                                </h5>
-                                <p className="text-sm text-foreground/80">
-                                  {analysis.details}
-                                </p>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-foreground/80">
-                          {alert.ai_impact_analysis}
-                        </p>
-                      )}
-                    </div>
+                    <Collapsible>
+                      <CollapsibleTrigger className="flex items-center justify-between w-full p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                          <h4 className="font-semibold text-foreground">
+                            {t('fiscalAlerts.impact')}
+                          </h4>
+                        </div>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2 p-4 border border-border rounded-lg bg-background/50">
+                        {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 ? (
+                          <ul className="space-y-3">
+                            {alert.fiscal_alerts_analysis.map((analysis, index) => (
+                              <li key={index} className="flex items-start space-x-2">
+                                <span className="text-primary mt-1">•</span>
+                                <div className="space-y-1">
+                                  <h5 className="font-bold text-foreground text-sm">
+                                    {analysis.topic}
+                                  </h5>
+                                  <p className="text-sm text-muted-foreground">
+                                    {analysis.details}
+                                  </p>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            {alert.ai_impact_analysis}
+                          </p>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
                   </CardContent>
                 </Card>
               ))}
