@@ -236,18 +236,21 @@ const FiscalAlerts = () => {
                         </h4>
                       </div>
                       {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 ? (
-                        <div className="space-y-3">
+                        <ul className="space-y-3">
                           {alert.fiscal_alerts_analysis.map((analysis, index) => (
-                            <div key={index} className="space-y-1">
-                              <h5 className="font-medium text-foreground text-sm">
-                                {analysis.topic}
-                              </h5>
-                              <p className="text-sm text-foreground/80">
-                                {analysis.details}
-                              </p>
-                            </div>
+                            <li key={index} className="flex items-start space-x-2">
+                              <span className="text-yellow-600 mt-1">•</span>
+                              <div className="space-y-1">
+                                <h5 className="font-bold text-foreground text-sm">
+                                  {analysis.topic}
+                                </h5>
+                                <p className="text-sm text-foreground/80">
+                                  {analysis.details}
+                                </p>
+                              </div>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       ) : (
                         <p className="text-sm text-foreground/80">
                           {alert.ai_impact_analysis}
