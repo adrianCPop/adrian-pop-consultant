@@ -51,16 +51,19 @@ const FiscalAlerts = () => {
   const [alerts, setAlerts] = useState<FiscalAlert[]>([]);
   const [filteredAlerts, setFilteredAlerts] = useState<FiscalAlert[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>("all");
+  const [selectedSource, setSelectedSource] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("date-desc");
   const [loading, setLoading] = useState(true);
   const [countries, setCountries] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
 
   useEffect(() => {
     fetchAlerts();
   }, []);
 
   useEffect(() => {
-    filterAlerts();
-  }, [alerts, selectedCountry]);
+    filterAndSortAlerts();
+  }, [alerts, selectedCountry, selectedSource, sortBy]);
 
   const fetchAlerts = async () => {
     try {
@@ -80,9 +83,11 @@ const FiscalAlerts = () => {
       const alertsData: FiscalAlert[] = await response.json();
       setAlerts(alertsData);
       
-      // Extract unique countries for filter
+      // Extract unique countries and sources for filters
       const uniqueCountries = [...new Set(alertsData.map(alert => alert.country))];
+      const uniqueSources = [...new Set(alertsData.map(alert => alert.source))];
       setCountries(uniqueCountries);
+      setSources(uniqueSources);
     } catch (error) {
       console.error('Error fetching fiscal alerts:', error);
     } finally {
@@ -90,12 +95,34 @@ const FiscalAlerts = () => {
     }
   };
 
-  const filterAlerts = () => {
+  const filterAndSortAlerts = () => {
     let filtered = alerts;
     
+    // Apply country filter
     if (selectedCountry !== "all") {
       filtered = filtered.filter(alert => alert.country === selectedCountry);
     }
+    
+    // Apply source filter
+    if (selectedSource !== "all") {
+      filtered = filtered.filter(alert => alert.source === selectedSource);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "date-desc":
+          return new Date(b.published_date).getTime() - new Date(a.published_date).getTime();
+        case "date-asc":
+          return new Date(a.published_date).getTime() - new Date(b.published_date).getTime();
+        case "source-asc":
+          return a.source.localeCompare(b.source);
+        case "source-desc":
+          return b.source.localeCompare(a.source);
+        default:
+          return 0;
+      }
+    });
     
     setFilteredAlerts(filtered);
   };
@@ -134,8 +161,9 @@ const FiscalAlerts = () => {
               </h2>
             </div>
             
-            <div className="flex gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex-1">
+                <label className="text-sm font-medium text-foreground mb-2 block">Country</label>
                 <Select value={selectedCountry} onValueChange={setSelectedCountry}>
                   <SelectTrigger>
                     <SelectValue placeholder={t('fiscalAlerts.selectCountry')} />
@@ -147,6 +175,38 @@ const FiscalAlerts = () => {
                         {getCountryFlag(country)} {country}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex-1">
+                <label className="text-sm font-medium text-foreground mb-2 block">Source</label>
+                <Select value={selectedSource} onValueChange={setSelectedSource}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Sources" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sources</SelectItem>
+                    {sources.map(source => (
+                      <SelectItem key={source} value={source}>
+                        {source}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex-1">
+                <label className="text-sm font-medium text-foreground mb-2 block">Sort by</label>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date-desc">Date (Newest First)</SelectItem>
+                    <SelectItem value="date-asc">Date (Oldest First)</SelectItem>
+                    <SelectItem value="source-asc">Source (A-Z)</SelectItem>
+                    <SelectItem value="source-desc">Source (Z-A)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
