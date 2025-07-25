@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, Filter, ExternalLink, AlertTriangle, ChevronDown, Brain, FileText, Loader2 } from "lucide-react";
+import { Calendar, Filter, ExternalLink, AlertTriangle, ChevronDown, Brain, Check, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -377,18 +377,24 @@ const FiscalAlerts = () => {
                      <div className="flex justify-end">
                        <Button
                          variant={alert.research_done ? "default" : "outline"}
-                         size="icon"
+                         size="sm"
                          onClick={() => handleResearchClick(alert)}
                          disabled={processingIds.has(alert.id)}
-                         className="h-8 w-8"
+                         className="flex items-center gap-2"
                        >
                          {processingIds.has(alert.id) ? (
                            <Loader2 className="w-4 h-4 animate-spin" />
                          ) : alert.research_done ? (
-                           <FileText className="w-4 h-4" />
+                           <Check className="w-4 h-4" />
                          ) : (
                            <Brain className="w-4 h-4" />
                          )}
+                         {processingIds.has(alert.id) 
+                           ? "Processing..." 
+                           : alert.research_done 
+                             ? "View Research" 
+                             : "Generate Research"
+                         }
                        </Button>
                      </div>
 
