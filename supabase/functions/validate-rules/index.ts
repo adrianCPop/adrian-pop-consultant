@@ -99,19 +99,27 @@ serve(async (req) => {
     const { rules, invoice }: ValidationRequest = await req.json()
     const result = validateInvoice(rules, invoice)
 
+    // Enhanced error handling for database logging
     try {
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
-      await supabase.from('rule_runs').insert({
+      
+      const { error: insertError } = await supabase.from('rule_runs').insert({
         created_at: new Date().toISOString(),
         is_valid: result.isValid,
         errors: result.errors,
         warnings: result.warnings,
       })
+      
+      if (insertError) {
+        console.error('Database logging failed:', insertError)
+        // Continue processing but log the failure
+      }
     } catch (e) {
-      console.error('Failed to log run', e)
+      console.error('Failed to log rule run to database:', e)
+      // Don't fail the entire request due to logging issues
     }
 
     return new Response(JSON.stringify(result), {

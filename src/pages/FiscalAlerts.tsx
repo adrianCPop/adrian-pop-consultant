@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/useTranslation";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constants";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -68,11 +69,11 @@ const FiscalAlerts = () => {
   const fetchAlerts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('https://wvcnymlvoouryxuriqtl.supabase.co/functions/v1/get-fiscal-alerts', {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-fiscal-alerts`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2Y255bWx2b291cnl4dXJpcXRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2ODU0ODQsImV4cCI6MjA2ODI2MTQ4NH0.GEqlRCi9Ejj4ew5OEwCu9yAY1I-mw_OL1HBe2CtCH4A',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         },
       });
 

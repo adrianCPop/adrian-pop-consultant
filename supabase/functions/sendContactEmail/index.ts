@@ -73,8 +73,17 @@ serve(async (req) => {
     );
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip") ?? "unknown";
+  // Enhanced rate limiting with additional validation
+  const ip = req.headers.get("x-forwarded-for") ?? 
+             req.headers.get("cf-connecting-ip") ?? 
+             req.headers.get("x-real-ip") ?? 
+             "unknown";
+  
+  // Additional validation for rate limiting bypass attempts
+  if (ip === "unknown") {
+    console.warn("Rate limiting: Unknown IP address detected");
+  }
+  
   const now = Date.now();
   const entry = ipCache.get(ip);
   if (entry) {
@@ -82,6 +91,7 @@ serve(async (req) => {
       ipCache.set(ip, { count: 1, timestamp: now });
     } else {
       if (entry.count >= RATE_LIMIT_COUNT) {
+        console.warn(`Rate limit exceeded for IP: ${ip}`);
         return new Response(
           JSON.stringify({ success: false, error: "Too many requests" }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }

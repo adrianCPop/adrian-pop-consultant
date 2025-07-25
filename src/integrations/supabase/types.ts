@@ -41,6 +41,7 @@ export type Database = {
       fiscal_alerts: {
         Row: {
           ai_impact_analysis: string
+          ai_structured: Json | null
           ai_summary: string
           country: string
           created_at: string
@@ -53,6 +54,7 @@ export type Database = {
         }
         Insert: {
           ai_impact_analysis: string
+          ai_structured?: Json | null
           ai_summary: string
           country: string
           created_at?: string
@@ -65,6 +67,7 @@ export type Database = {
         }
         Update: {
           ai_impact_analysis?: string
+          ai_structured?: Json | null
           ai_summary?: string
           country?: string
           created_at?: string
@@ -76,6 +79,38 @@ export type Database = {
           url?: string
         }
         Relationships: []
+      }
+      fiscal_alerts_analysis: {
+        Row: {
+          alert_id: string
+          details: string | null
+          id: string
+          topic: string | null
+          type: string | null
+        }
+        Insert: {
+          alert_id: string
+          details?: string | null
+          id?: string
+          topic?: string | null
+          type?: string | null
+        }
+        Update: {
+          alert_id?: string
+          details?: string | null
+          id?: string
+          topic?: string | null
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_alerts_analysis_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_alerts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rule_runs: {
         Row: {
