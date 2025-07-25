@@ -19,24 +19,24 @@ const ResearchModal = ({ open, onClose, htmlContent }: ResearchModalProps) => {
       />
       
       {/* Modal */}
-      <div className="relative bg-background border border-border rounded-lg shadow-lg max-w-4xl max-h-[80vh] w-full mx-4 overflow-hidden">
+      <div className="relative bg-card border border-border rounded-xl shadow-xl max-w-2xl max-h-[85vh] w-full mx-4 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">Advanced Research</h2>
+        <div className="flex items-center justify-between p-6 border-b border-border bg-muted/5">
+          <h2 className="text-xl font-semibold text-card-foreground">Advanced Research</h2>
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8"
+            className="h-8 w-8 hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
         
         {/* Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(80vh-80px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(85vh-88px)] bg-card">
           <div 
-            className="prose prose-sm max-w-none dark:prose-invert"
+            className="prose prose-base max-w-none prose-headings:text-card-foreground prose-p:text-card-foreground prose-p:leading-relaxed prose-strong:text-card-foreground prose-li:text-card-foreground"
             dangerouslySetInnerHTML={{ __html: htmlContent }}
           />
         </div>
