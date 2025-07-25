@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Calendar, Filter, ExternalLink, AlertTriangle, ChevronDown } from "lucide-react";
+import { Calendar, Filter, ExternalLink, AlertTriangle, ChevronDown, Brain, Check, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/useTranslation";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constants";
+import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ResearchModal from "@/components/ResearchModal";
 
 interface FiscalAlert {
   id: string;
@@ -20,6 +22,8 @@ interface FiscalAlert {
   published_date: string;
   ai_summary: string;
   ai_impact_analysis: string;
+  ai_structured?: object;
+  research_done?: boolean;
   fiscal_alerts_analysis: {
     topic: string;
     details: string;
@@ -57,6 +61,9 @@ const FiscalAlerts = () => {
   const [loading, setLoading] = useState(true);
   const [countries, setCountries] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState("");
 
   useEffect(() => {
     fetchAlerts();
@@ -65,6 +72,39 @@ const FiscalAlerts = () => {
   useEffect(() => {
     filterAndSortAlerts();
   }, [alerts, selectedCountry, selectedSource, sortBy]);
+
+  useEffect(() => {
+    // Subscribe to advanced_research table changes
+    const channel = supabase
+      .channel('advanced_research_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'advanced_research'
+        },
+        (payload) => {
+          // Update the alert's research_done status
+          setAlerts(prev => prev.map(alert => 
+            alert.id === payload.new.fiscal_alert_id 
+              ? { ...alert, research_done: true }
+              : alert
+          ));
+          // Remove from processing set
+          setProcessingIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(payload.new.fiscal_alert_id);
+            return newSet;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const fetchAlerts = async () => {
     try {
@@ -135,6 +175,59 @@ const FiscalAlerts = () => {
         <span>{point.trim()}</span>
       </li>
     ));
+  };
+
+  const handleResearchClick = async (alert: FiscalAlert) => {
+    if (!alert.research_done) {
+      // Trigger research
+      setProcessingIds(prev => new Set(prev).add(alert.id));
+      
+      try {
+        await fetch('https://n8n.srv923194.hstgr.cloud/webhook-test/ai-topic-query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authentication': 'Summarize the fiscal implication or regulatory impact described in the article'
+          },
+          body: JSON.stringify({
+            topic_detail: alert.ai_summary,
+            fiscal_alert_id: alert.id,
+            topic_context: alert.country
+          })
+        });
+      } catch (error) {
+        console.error('Error triggering research:', error);
+        setProcessingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(alert.id);
+          return newSet;
+        });
+      }
+    } else {
+      // Fetch and show research
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/advanced_research?fiscal_alert_id=eq.${alert.id}&select=html`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch research');
+        }
+
+        const data = await response.json();
+        const research = data[0];
+        
+        setModalContent(research?.html || '');
+        setModalOpen(true);
+      } catch (error) {
+        console.error('Error fetching research:', error);
+      }
+    }
   };
 
   return (
@@ -279,18 +372,43 @@ const FiscalAlerts = () => {
                     </div>
                   </CardHeader>
                   
-                  <CardContent className="space-y-4">
-                    {/* AI Summary */}
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-2">
-                        {t('fiscalAlerts.summary')}
-                      </h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        {formatSummaryPoints(alert.ai_summary)}
-                      </ul>
-                    </div>
-                    
-                    {/* Impact Analysis */}
+                   <CardContent className="space-y-4">
+                     {/* Research Button */}
+                     <div className="flex justify-end">
+                       <Button
+                         variant={alert.research_done ? "default" : "outline"}
+                         size="sm"
+                         onClick={() => handleResearchClick(alert)}
+                         disabled={processingIds.has(alert.id)}
+                         className="flex items-center gap-2"
+                       >
+                         {processingIds.has(alert.id) ? (
+                           <Loader2 className="w-4 h-4 animate-spin" />
+                         ) : alert.research_done ? (
+                           <Check className="w-4 h-4" />
+                         ) : (
+                           <Brain className="w-4 h-4" />
+                         )}
+                         {processingIds.has(alert.id) 
+                           ? "Processing..." 
+                           : alert.research_done 
+                             ? "View Research" 
+                             : "Generate Research"
+                         }
+                       </Button>
+                     </div>
+
+                     {/* AI Summary */}
+                     <div>
+                       <h4 className="font-semibold text-foreground mb-2">
+                         {t('fiscalAlerts.summary')}
+                       </h4>
+                       <ul className="text-sm text-muted-foreground space-y-1">
+                         {formatSummaryPoints(alert.ai_summary)}
+                       </ul>
+                     </div>
+                     
+                     {/* Impact Analysis */}
                     <Collapsible>
                       <CollapsibleTrigger className="flex items-center justify-between w-full p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-2">
@@ -347,6 +465,12 @@ const FiscalAlerts = () => {
       </main>
 
       <Footer />
+      
+      <ResearchModal 
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        htmlContent={modalContent}
+      />
     </div>
   );
 };
