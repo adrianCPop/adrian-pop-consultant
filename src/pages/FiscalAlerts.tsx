@@ -380,7 +380,11 @@ const FiscalAlerts = () => {
                          size="icon"
                          onClick={() => handleResearchClick(alert)}
                          disabled={processingIds.has(alert.id)}
-                         className="h-8 w-8"
+                         className={`h-8 w-8 ${
+                           alert.research_done 
+                             ? "bg-green-500 hover:bg-green-600 border-green-500 text-white" 
+                             : ""
+                         }`}
                        >
                          {processingIds.has(alert.id) ? (
                            <Loader2 className="w-4 h-4 animate-spin" />
