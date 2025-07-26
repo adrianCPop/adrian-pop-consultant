@@ -388,8 +388,6 @@ const FiscalAlerts = () => {
                        >
                          {processingIds.has(alert.id) ? (
                            <Loader2 className="w-4 h-4 animate-spin" />
-                         ) : alert.research_done ? (
-                           <FileText className="w-4 h-4" />
                          ) : (
                            <Brain className="w-4 h-4" />
                          )}
