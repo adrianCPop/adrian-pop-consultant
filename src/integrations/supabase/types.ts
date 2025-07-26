@@ -14,6 +14,35 @@ export type Database = {
   }
   public: {
     Tables: {
+      advanced_research: {
+        Row: {
+          created_at: string | null
+          fiscal_alert_id: string
+          html: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          fiscal_alert_id: string
+          html?: string | null
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          fiscal_alert_id?: string
+          html?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advanced_research_fiscal_alert_id_fkey"
+            columns: ["fiscal_alert_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_alerts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_submissions: {
         Row: {
           email: string
@@ -47,6 +76,7 @@ export type Database = {
           created_at: string
           id: string
           published_date: string
+          research_done: boolean | null
           source: string
           title: string
           updated_at: string
@@ -60,6 +90,7 @@ export type Database = {
           created_at?: string
           id?: string
           published_date: string
+          research_done?: boolean | null
           source: string
           title: string
           updated_at?: string
@@ -73,6 +104,7 @@ export type Database = {
           created_at?: string
           id?: string
           published_date?: string
+          research_done?: boolean | null
           source?: string
           title?: string
           updated_at?: string
