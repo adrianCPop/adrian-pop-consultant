@@ -75,6 +75,7 @@ const FiscalAlerts = () => {
 
   useEffect(() => {
     // Subscribe to advanced_research table changes
+    console.log('Setting up realtime subscription...');
     const channel = supabase
       .channel('advanced_research_changes')
       .on(
@@ -85,6 +86,7 @@ const FiscalAlerts = () => {
           table: 'advanced_research'
         },
         (payload) => {
+          console.log('Received realtime update:', payload);
           // Update the alert's research_done status
           setAlerts(prev => prev.map(alert => 
             alert.id === payload.new.fiscal_alert_id 
@@ -95,13 +97,17 @@ const FiscalAlerts = () => {
           setProcessingIds(prev => {
             const newSet = new Set(prev);
             newSet.delete(payload.new.fiscal_alert_id);
+            console.log('Removing from processing:', payload.new.fiscal_alert_id);
             return newSet;
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
 
     return () => {
+      console.log('Cleaning up subscription...');
       supabase.removeChannel(channel);
     };
   }, []);
@@ -386,11 +392,7 @@ const FiscalAlerts = () => {
                              : ""
                          }`}
                        >
-                         {processingIds.has(alert.id) ? (
-                           <Loader2 className="w-4 h-4 animate-spin" />
-                         ) : (
-                           <Brain className="w-4 h-4" />
-                         )}
+                         <Brain className={`w-4 h-4 ${processingIds.has(alert.id) ? 'animate-spin' : ''}`} />
                        </Button>
                      </div>
 
