@@ -183,7 +183,7 @@ const FiscalAlerts = () => {
       setProcessingIds(prev => new Set(prev).add(alert.id));
       
       try {
-        await fetch('https://n8n.srv923194.hstgr.cloud/webhook-test/ai-topic-query', {
+        await fetch('https://n8n.srv923194.hstgr.cloud/webhook/ai-topic-query', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
