@@ -30,7 +30,7 @@ const Header = () => {
             </Link>
             
             {/* Navigation Menu */}
-            <nav className="hidden md:flex items-center space-x-6">
+            <nav className="flex items-center space-x-6">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2">
