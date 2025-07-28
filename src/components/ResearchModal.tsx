@@ -11,7 +11,7 @@ const ResearchModal = ({
 }: ResearchModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden bg-background/95 backdrop-blur-md border shadow-2xl rounded-2xl p-0 sm:p-6">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden bg-background border shadow-2xl rounded-2xl p-0 sm:p-6">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-2xl font-semibold text-foreground">
             Advanced Research
