@@ -124,4 +124,18 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
-}
+  }
+
+  /* Prevent layout shift when modal opens */
+  [data-radix-portal] {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 50 !important;
+  }
+
+  /* Ensure modal doesn't affect body layout */
+  body[data-scroll-locked] {
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    overflow: hidden !important;
+  }
