@@ -16,13 +16,16 @@ const ResearchModal = ({
   // Disable body scroll when modal is open
   useEffect(() => {
     if (open) {
-      document.body.style.overflow = 'hidden';
+      document.body.setAttribute('data-scroll-locked', 'true');
+      document.body.classList.add('overflow-hidden');
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.removeAttribute('data-scroll-locked');
+      document.body.classList.remove('overflow-hidden');
     }
-    
+
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.removeAttribute('data-scroll-locked');
+      document.body.classList.remove('overflow-hidden');
     };
   }, [open]);
 
