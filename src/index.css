@@ -124,7 +124,6 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
-  }
 
   /* Prevent layout shift when modal opens */
   [data-radix-portal] {
@@ -139,3 +138,4 @@ All colors MUST be HSL.
     margin-right: 0 !important;
     overflow: hidden !important;
   }
+}
