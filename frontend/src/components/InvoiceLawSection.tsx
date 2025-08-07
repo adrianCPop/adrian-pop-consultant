@@ -110,7 +110,11 @@ const InvoiceLawSection = () => {
       
       // Handle different possible response formats from n8n
       let responseText = '';
-      if (data.response) {
+      
+      // Handle the specific format from your n8n workflow with nested content structure
+      if (data.content && data.content.parts && Array.isArray(data.content.parts) && data.content.parts[0] && data.content.parts[0].text) {
+        responseText = data.content.parts[0].text;
+      } else if (data.response) {
         responseText = data.response;
       } else if (data.message) {
         // Check if it's an error message
