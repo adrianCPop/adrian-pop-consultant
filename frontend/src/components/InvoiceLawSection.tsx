@@ -38,37 +38,7 @@ interface ValidationResult {
 
 
 
-const defaultInvoice = {
-  invoice: {
-    id: "INV-TEST-001",
-    date: "2025-07-20",
-    totalAmount: -50,
-    currency: "EUR",
-    buyer: {
-      name: "Global Distribution Ltd",
-      country: "MX",
-      vatNumber: ""
-    },
-    seller: {
-      name: "Adrian Pop Consulting",
-      country: "ES",
-      vatNumber: "ES987654321"
-    },
-    lineItems: [
-      {
-        description: "Consulting Services",
-        quantity: 5,
-        unitPrice: 200
-      },
-      {
-        description: "AI-based validation setup",
-        quantity: 1,
-        unitPrice: 0
-      }
-    ],
-    paymentMethod: null
-  }
-};
+
 
 const InvoiceLawSection = () => {
   const [isLoading, setIsLoading] = useState(false);
