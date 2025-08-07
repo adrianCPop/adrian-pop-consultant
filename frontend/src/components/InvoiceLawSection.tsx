@@ -191,21 +191,6 @@ const InvoiceLawSection = () => {
     <section id="invoice-law" className="py-16 md:py-24 bg-gradient-subtle">
       <div className="container-mobile">
         <div className="max-w-7xl mx-auto">
-          {/* Section Header */}
-          <div className="text-center mb-12 md:mb-16">
-            <div className="inline-flex items-center gap-2 bg-gradient-card px-4 py-2 rounded-full border border-border mb-6 glass-effect">
-              <Play className="w-4 h-4 text-accent" />
-              <span className="text-sm font-medium text-muted-foreground">Interactive Demo</span>
-            </div>
-            <h2 className="text-mobile-title font-bold text-foreground mb-4">
-              Can you beat Adrian's logic?
-            </h2>
-            <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Build your own invoice validation rules and test them against real JSON data. 
-              See if you can create logic as robust as what I've built for enterprise clients.
-            </p>
-          </div>
-
           <div className="max-w-4xl mx-auto">
             {/* AI Chat Bot - Full Width */}
             <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern">
