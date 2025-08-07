@@ -138,17 +138,7 @@ const InvoiceLawSection = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Helper function to get validation status
-  const getValidationStatus = () => {
-    if (!result) return null;
-    
-    const hasErrors = result.errors?.length > 0 || result.isValid === false;
-    const hasWarnings = result.warnings?.length > 0;
-    
-    if (hasErrors) return { type: 'error', label: '❌ Errors', color: 'destructive' } as const;
-    if (hasWarnings) return { type: 'warning', label: '⚠ Warnings', color: 'secondary' } as const;
-    return { type: 'success', label: '✓ Valid', color: 'default' } as const;
-  };
+
 
   return (
     <section id="invoice-law" className="py-16 md:py-24 bg-gradient-subtle">
