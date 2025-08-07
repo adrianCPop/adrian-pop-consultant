@@ -13,12 +13,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constan
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
-interface Rule {
-  id: string;
-  field: string;
-  operator: string;
-  value: string;
-  action: string;
+interface ChatMessage {
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
 }
 
 interface ValidationResult {
