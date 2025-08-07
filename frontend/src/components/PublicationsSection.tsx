@@ -122,7 +122,7 @@ const PublicationsSection = () => {
                       </h3>
                       <div className="flex items-center justify-center md:justify-start gap-2 text-muted-foreground">
                         <Calendar className="w-4 h-4" />
-                        <span className="text-sm">Medium • January 2025</span>
+                        <span className="text-sm">Medium • Aug 4, 2025</span>
                       </div>
                     </div>
                     
