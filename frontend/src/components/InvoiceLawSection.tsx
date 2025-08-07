@@ -316,24 +316,6 @@ const InvoiceLawSection = () => {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Right Column - JSON Input */}
-            <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-foreground text-xl">Invoice JSON Data</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Paste your invoice JSON here or use the sample data
-                </p>
-              </CardHeader>
-              <CardContent>
-                <JsonEditor
-                  placeholder={`Enter your invoice JSON here, e.g.:\n{\n  "documentType": "invoice",\n  "totalAmount": 1000.00,\n  "currencyCode": "EUR",\n  "invoiceNumber": "INV-2024-001",\n  "issueDate": "2024-01-15",\n  "supplierName": "ACME Corp",\n  "buyerName": "Example Ltd",\n  "taxAmount": 200.00,\n  "netAmount": 800.00\n}`}
-                  value={jsonInput}
-                  onChange={setJsonInput}
-                  className="min-h-[250px] md:min-h-[350px] touch-manipulation"
-                />
-              </CardContent>
-            </Card>
           </div>
 
           {/* Action Buttons - Test JSON Validation */}
