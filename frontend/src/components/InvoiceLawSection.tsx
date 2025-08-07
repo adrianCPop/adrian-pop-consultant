@@ -113,8 +113,8 @@ const InvoiceLawSection = () => {
     setIsTyping(true);
 
     try {
-      // Replace this URL with your actual n8n webhook URL
-      const n8nWebhookUrl = "YOUR_N8N_WEBHOOK_URL_HERE"; // You'll need to provide this
+      // Your n8n webhook URL
+      const n8nWebhookUrl = "https://n8n.srv923194.hstgr.cloud/webhook/e1fbbe47-646f-4864-bd4e-666f6866430a/chat";
       
       const response = await fetch(n8nWebhookUrl, {
         method: 'POST',
