@@ -227,10 +227,7 @@ const InvoiceLawSection = () => {
                       <div className="w-16 h-16 bg-gradient-primary rounded-2xl flex items-center justify-center mb-4 shadow-glow-modern">
                         <Brain className="w-8 h-8 text-primary-foreground" />
                       </div>
-                      <p className="text-muted-foreground mb-2">Hi! I'm your AI Invoice Assistant</p>
-                      <p className="text-sm text-muted-foreground max-w-sm">
-                        Ask me anything about invoice validation, eInvoicing standards, compliance rules, or process optimization.
-                      </p>
+                      <p className="text-muted-foreground mb-2">Describe your problem and let's see if my AI assistant thinks that I can help</p>
                     </div>
                   ) : (
                     chatMessages.map((message, index) => (
