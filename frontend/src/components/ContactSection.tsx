@@ -232,7 +232,7 @@ const ContactSection = () => {
                       value={formData.message}
                       onChange={handleInputChange}
                       required
-                      className="bg-background/50 border-border focus:border-primary resize-none touch-manipulation"
+                      className="bg-background/50 border-border focus:border-primary resize-none touch-manipulation text-foreground placeholder:text-muted-foreground"
                       placeholder="Tell me about your project, challenges, or how I can help..."
                     />
                   </div>
