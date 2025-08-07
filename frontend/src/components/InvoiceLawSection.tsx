@@ -96,7 +96,6 @@ const defaultInvoice = {
 };
 
 const InvoiceLawSection = () => {
-  const [rules, setRules] = useState<Rule[]>([]);
   const [jsonInput, setJsonInput] = useState(
     JSON.stringify(defaultInvoice, null, 2)
   );
@@ -104,6 +103,13 @@ const InvoiceLawSection = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
+  
+  // Chat-related state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
   const { toast } = useToast();
 
   // Helper function to get validation status
