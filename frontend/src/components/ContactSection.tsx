@@ -218,7 +218,7 @@ const ContactSection = () => {
                       value={formData.email}
                       onChange={handleInputChange}
                       required
-                      className="bg-background/50 border-border focus:border-primary h-12 touch-manipulation"
+                      className="bg-background/50 border-border focus:border-primary h-12 touch-manipulation text-foreground placeholder:text-muted-foreground"
                       placeholder="your.email@domain.com"
                     />
                   </div>
