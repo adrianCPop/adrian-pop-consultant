@@ -8,66 +8,102 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* AI Playground Dark Theme */
+    /* Modern Tech Startup Dark Theme - Mobile First */
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
 
-    --card: 240 10% 3.9%;
+    --card: 240 8% 5%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 240 5% 6%;
+    --popover: 240 8% 4%;
     --popover-foreground: 0 0% 98%;
 
-    /* Tech Blue Primary */
-    --primary: 217 91% 60%;
+    /* Modern Tech Blue Primary */
+    --primary: 217 91% 65%;
     --primary-foreground: 0 0% 98%;
 
-    /* Dark Surface Secondary */
-    --secondary: 240 5% 6%;
+    /* Enhanced Surface Secondary */
+    --secondary: 240 6% 8%;
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 240 5% 6%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 240 6% 8%;
+    --muted-foreground: 240 5% 70%;
 
-    /* Cyber Green Accent */
-    --accent: 142 76% 36%;
+    /* Modern Accent Colors */
+    --accent: 151 83% 45%;
     --accent-foreground: 0 0% 98%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 5% 11%;
-    --input: 240 5% 11%;
-    --ring: 217 91% 60%;
+    --border: 240 6% 12%;
+    --input: 240 6% 12%;
+    --ring: 217 91% 65%;
 
-    --radius: 0.75rem;
+    --radius: 0.875rem;
 
-    /* Code block styling */
-    --code-bg: 240 5% 6%;
-    --code-border: 240 5% 11%;
+    /* Enhanced Mobile Design Tokens */
+    --mobile-padding: 1rem;
+    --mobile-max-width: 100%;
+    --desktop-padding: 2rem;
+    --desktop-max-width: 1200px;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(142 76% 36%));
-    --gradient-subtle: linear-gradient(180deg, var(--color-background), color-mix(in srgb, var(--color-background) 80%, var(--color-primary) 20%));
+    /* Modern Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 65%), hsl(151 83% 45%));
+    --gradient-hero: linear-gradient(135deg, hsl(240 10% 3.9%) 0%, hsl(240 8% 5%) 50%, hsl(217 91% 65% / 0.05) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(240 8% 5% / 0.8), hsl(240 6% 8% / 0.4));
+    --gradient-subtle: linear-gradient(180deg, transparent, hsl(217 91% 65% / 0.02));
 
-    /* Shadows */
-    --shadow-glow: 0 0 40px hsl(217 91% 60% / 0.3);
-    --shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.06);
+    /* Enhanced Shadows for Mobile */
+    --shadow-glow: 0 0 60px hsl(217 91% 65% / 0.15);
+    --shadow-card: 0 8px 32px hsl(0 0% 0% / 0.12);
+    --shadow-card-hover: 0 16px 64px hsl(0 0% 0% / 0.16);
+    --shadow-button: 0 4px 12px hsl(217 91% 65% / 0.2);
 
-    --sidebar-background: 240 5% 6%;
+    /* Typography Scale for Mobile */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+    --text-4xl: 2.25rem;
+    --text-5xl: 3rem;
+    --text-6xl: 3.75rem;
+
+    /* Spacing Scale for Mobile */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+    --space-20: 5rem;
+    --space-24: 6rem;
+
+    /* Animation Durations */
+    --duration-fast: 150ms;
+    --duration-normal: 300ms;
+    --duration-slow: 500ms;
+
+    /* Sidebar (keeping existing) */
+    --sidebar-background: 240 6% 8%;
     --sidebar-foreground: 240 5% 90%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 217 91% 65%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 5% 11%;
+    --sidebar-accent: 240 6% 12%;
     --sidebar-accent-foreground: 240 5% 90%;
-    --sidebar-border: 240 5% 11%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-border: 240 6% 12%;
+    --sidebar-ring: 217 91% 65%;
 
     /* User theme variables */
-    --color-primary: #3c83f6;
+    --color-primary: #4f94ff;
     --color-background: #09090b;
     --color-text: #fafafa;
-    --color-accent: #16a249;
+    --color-accent: #2dd85b;
   }
 
   .light {
