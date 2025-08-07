@@ -10,7 +10,7 @@ import CookieConsent from "@/components/CookieConsent";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+    <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Header />
       
       <main className="flex-1">
