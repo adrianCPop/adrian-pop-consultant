@@ -264,7 +264,8 @@ const InvoiceLawSection = () => {
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="Ask about invoice validation, compliance, or eInvoicing..."
                       disabled={isTyping}
-                      className="flex-1 h-12 px-4 rounded-xl bg-background/50 border border-border focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground touch-manipulation"
+                      className="flex-1 h-12 px-4 rounded-xl bg-white/90 border border-border focus:border-primary transition-colors text-gray-900 placeholder:text-gray-500 touch-manipulation"
+                      style={{ color: '#1f2937', backgroundColor: 'rgba(255, 255, 255, 0.9)' }}
                     />
                     <Button
                       type="submit"
