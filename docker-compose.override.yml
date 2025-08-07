@@ -1,0 +1,27 @@
+# Development overrides for docker-compose
+# This file is automatically merged with docker-compose.yml in development
+
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      - DEBUG=true
+      - RELOAD=true
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8001:8000"  # Different port for development
+
+  frontend:
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "3001:80"  # Different port for development
+
+  nginx:
+    ports:
+      - "8080:80"  # Different port for development
+    volumes:
+      - ./nginx/nginx-dev.conf:/etc/nginx/nginx.conf:ro
