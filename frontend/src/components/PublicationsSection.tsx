@@ -194,7 +194,7 @@ const PublicationsSection = () => {
                   </p>
                   <div className="inline-flex items-center gap-2 text-xs text-muted-foreground bg-background/50 px-3 py-1 rounded-full">
                     <Calendar className="w-3 h-3" />
-                    <span>Coming Q3 2025</span>
+                    <span>Coming 3 2025</span>
                   </div>
                 </CardContent>
               </Card>
