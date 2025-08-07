@@ -99,14 +99,6 @@ const ServicesSection = () => {
                   <CardDescription className="text-muted-foreground leading-relaxed text-sm md:text-base">
                     {service.description}
                   </CardDescription>
-
-                  {/* Interactive Element */}
-                  <div className="mt-6 flex items-center text-primary opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-0 group-hover:translate-x-2">
-                    <span className="text-sm font-medium">Learn more</span>
-                    <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
                 </CardContent>
               </Card>
             ))}
