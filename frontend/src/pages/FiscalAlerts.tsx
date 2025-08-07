@@ -237,228 +237,286 @@ const FiscalAlerts = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle flex flex-col">
+    <div className="min-h-screen bg-gradient-hero flex flex-col">
       <Header />
       
-      <main className="flex-1 container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto">
-          {/* Header Section */}
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-foreground mb-4">
-              {t('fiscalAlerts.title')}
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              {t('fiscalAlerts.subtitle')}
-            </p>
-          </div>
-
-          {/* Filters Section */}
-          <div className="bg-background/80 backdrop-blur rounded-lg border p-6 mb-8">
-            <div className="flex items-center gap-4 mb-4">
-              <Filter className="w-5 h-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold text-foreground">
-                {t('fiscalAlerts.filters')}
-              </h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex-1">
-                <label className="text-sm font-medium text-foreground mb-2 block">Country</label>
-                <Select value={selectedCountry} onValueChange={setSelectedCountry}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('fiscalAlerts.selectCountry')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t('fiscalAlerts.allCountries')}</SelectItem>
-                    {countries.map(country => (
-                      <SelectItem key={country} value={country}>
-                        {getCountryFlag(country)} {country}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <main className="flex-1 pt-20">
+        <div className="container-mobile">
+          <div className="max-w-7xl mx-auto">
+            {/* Header Section */}
+            <div className="text-center mb-12 md:mb-16">
+              <div className="inline-flex items-center gap-2 bg-gradient-card px-4 py-2 rounded-full border border-border mb-6 glass-effect">
+                <AlertTriangle className="w-4 h-4 text-accent" />
+                <span className="text-sm font-medium text-muted-foreground">Real-time Monitoring</span>
               </div>
-              
-              <div className="flex-1">
-                <label className="text-sm font-medium text-foreground mb-2 block">Source</label>
-                <Select value={selectedSource} onValueChange={setSelectedSource}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Sources" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sources</SelectItem>
-                    {sources.map(source => (
-                      <SelectItem key={source} value={source}>
-                        {source}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex-1">
-                <label className="text-sm font-medium text-foreground mb-2 block">Sort by</label>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date-desc">Date (Newest First)</SelectItem>
-                    <SelectItem value="date-asc">Date (Oldest First)</SelectItem>
-                    <SelectItem value="source-asc">Source (A-Z)</SelectItem>
-                    <SelectItem value="source-desc">Source (Z-A)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Results Count */}
-          <div className="mb-6">
-            <p className="text-muted-foreground">
-              {t('fiscalAlerts.showing')} {filteredAlerts.length} {t('fiscalAlerts.alerts')}
-            </p>
-          </div>
-
-          {/* Loading State */}
-          {loading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardHeader>
-                    <div className="h-6 bg-muted rounded w-3/4"></div>
-                    <div className="h-4 bg-muted rounded w-1/2"></div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-muted rounded"></div>
-                      <div className="h-4 bg-muted rounded"></div>
-                      <div className="h-16 bg-muted rounded"></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Alerts Grid */}
-          {!loading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredAlerts.map((alert) => (
-                <Card key={alert.id} className="hover:shadow-lg transition-shadow duration-200">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg leading-tight">
-                        <a 
-                          href={alert.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="hover:text-primary transition-colors duration-200 flex items-start gap-2"
-                        >
-                          {alert.title}
-                          <ExternalLink className="w-4 h-4 mt-1 flex-shrink-0" />
-                        </a>
-                      </CardTitle>
-                      {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 && (
-                        <Badge variant="secondary" className="ml-2 text-xs">
-                          {alert.fiscal_alerts_analysis.length} impact{alert.fiscal_alerts_analysis.length !== 1 ? 's' : ''}
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{getCountryFlag(alert.country)} {alert.country}</span>
-                      <span>•</span>
-                      <span>{alert.source}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      <span>{format(new Date(alert.published_date), 'MMM dd, yyyy')}</span>
-                    </div>
-                  </CardHeader>
-                  
-                   <CardContent className="space-y-4">
-                     {/* Research Button */}
-                     <div className="flex justify-end">
-                       <Button
-                         variant={alert.research_done ? "default" : "outline"}
-                         size="icon"
-                         onClick={() => handleResearchClick(alert)}
-                         disabled={processingIds.has(alert.id)}
-                         className={`h-8 w-8 ${
-                           alert.research_done 
-                             ? "bg-green-500 hover:bg-green-600 border-green-500 text-white" 
-                             : ""
-                         }`}
-                       >
-                         <Brain className={`w-4 h-4 ${processingIds.has(alert.id) ? 'animate-spin' : ''}`} />
-                       </Button>
-                     </div>
-
-                     {/* AI Summary */}
-                     <div>
-                       <h4 className="font-semibold text-foreground mb-2">
-                         {t('fiscalAlerts.summary')}
-                       </h4>
-                       <ul className="text-sm text-muted-foreground space-y-1">
-                         {formatSummaryPoints(alert.ai_summary)}
-                       </ul>
-                     </div>
-                     
-                     {/* Impact Analysis */}
-                    <Collapsible>
-                      <CollapsibleTrigger className="flex items-center justify-between w-full p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-muted-foreground" />
-                          <h4 className="font-semibold text-foreground">
-                            {t('fiscalAlerts.impact')}
-                          </h4>
-                        </div>
-                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="mt-2 p-4 border border-border rounded-lg bg-background/50">
-                        {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 ? (
-                          <ul className="space-y-3">
-                            {alert.fiscal_alerts_analysis.map((analysis, index) => (
-                              <li key={index} className="flex items-start space-x-2">
-                                <span className="text-primary mt-1">•</span>
-                                <div className="space-y-1">
-                                  <h5 className="font-bold text-foreground text-sm">
-                                    {analysis.topic}
-                                  </h5>
-                                  <p className="text-sm text-muted-foreground">
-                                    {analysis.details}
-                                  </p>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            {alert.ai_impact_analysis}
-                          </p>
-                        )}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* No Results */}
-          {!loading && filteredAlerts.length === 0 && (
-            <div className="text-center py-12">
-              <AlertTriangle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                {t('fiscalAlerts.noResults')}
-              </h3>
-              <p className="text-muted-foreground">
-                {t('fiscalAlerts.noResultsDescription')}
+              <h1 className="text-mobile-title font-bold text-foreground mb-4">
+                {t('fiscalAlerts.title')}
+              </h1>
+              <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+                {t('fiscalAlerts.subtitle')}
               </p>
             </div>
-          )}
+
+            {/* Filters Section */}
+            <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern mb-8">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-primary rounded-xl flex items-center justify-center shadow-glow-modern">
+                    <Filter className="w-4 h-4 text-primary-foreground" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    {t('fiscalAlerts.filters')}
+                  </h2>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Country</label>
+                    <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                      <SelectTrigger className="h-12 glass-effect touch-manipulation">
+                        <SelectValue placeholder={t('fiscalAlerts.selectCountry')} />
+                      </SelectTrigger>
+                      <SelectContent className="glass-effect">
+                        <SelectItem value="all">{t('fiscalAlerts.allCountries')}</SelectItem>
+                        {countries.map(country => (
+                          <SelectItem key={country} value={country}>
+                            {getCountryFlag(country)} {country}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Source</label>
+                    <Select value={selectedSource} onValueChange={setSelectedSource}>
+                      <SelectTrigger className="h-12 glass-effect touch-manipulation">
+                        <SelectValue placeholder="All Sources" />
+                      </SelectTrigger>
+                      <SelectContent className="glass-effect">
+                        <SelectItem value="all">All Sources</SelectItem>
+                        {sources.map(source => (
+                          <SelectItem key={source} value={source}>
+                            {source}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Sort by</label>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger className="h-12 glass-effect touch-manipulation">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent className="glass-effect">
+                        <SelectItem value="date-desc">Date (Newest First)</SelectItem>
+                        <SelectItem value="date-asc">Date (Oldest First)</SelectItem>
+                        <SelectItem value="source-asc">Source (A-Z)</SelectItem>
+                        <SelectItem value="source-desc">Source (Z-A)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Results Count & Status */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <p className="text-muted-foreground font-medium">
+                  {t('fiscalAlerts.showing')} <span className="text-foreground">{filteredAlerts.length}</span> {t('fiscalAlerts.alerts')}
+                </p>
+              </div>
+              
+              {!loading && filteredAlerts.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="w-4 h-4" />
+                  <span>Last updated: {format(new Date(), 'MMM dd, HH:mm')}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Loading State */}
+            {loading && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="bg-gradient-card backdrop-blur-sm border-border animate-pulse">
+                    <CardHeader className="pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-3 flex-1">
+                          <div className="h-5 bg-muted rounded w-3/4"></div>
+                          <div className="h-4 bg-muted rounded w-1/2"></div>
+                          <div className="h-4 bg-muted rounded w-2/3"></div>
+                        </div>
+                        <div className="w-8 h-8 bg-muted rounded-xl ml-4"></div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        <div className="h-4 bg-muted rounded"></div>
+                        <div className="h-4 bg-muted rounded w-4/5"></div>
+                        <div className="h-20 bg-muted rounded"></div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Alerts Grid */}
+            {!loading && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredAlerts.map((alert, index) => (
+                  <Card 
+                    key={alert.id} 
+                    className="group bg-gradient-card backdrop-blur-sm border-border hover:shadow-card-hover transition-all duration-300 hover:-translate-y-2 touch-manipulation"
+                    style={{
+                      animationDelay: `${index * 100}ms`
+                    }}
+                  >
+                    <CardHeader className="pb-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-lg leading-tight mb-3">
+                            <a 
+                              href={alert.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="hover:text-primary transition-colors duration-200 flex items-start gap-2 group/link"
+                            >
+                              <span className="line-clamp-3">{alert.title}</span>
+                              <ExternalLink className="w-4 h-4 mt-1 flex-shrink-0 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                            </a>
+                          </CardTitle>
+                          
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                            <span className="font-medium">{getCountryFlag(alert.country)} {alert.country}</span>
+                            <span className="w-1 h-1 bg-muted-foreground rounded-full"></span>
+                            <span>{alert.source}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="w-4 h-4" />
+                            <span>{format(new Date(alert.published_date), 'MMM dd, yyyy')}</span>
+                          </div>
+                        </div>
+
+                        {/* Impact Badge & Research Button */}
+                        <div className="flex flex-col items-end gap-2">
+                          {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 && (
+                            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                              {alert.fiscal_alerts_analysis.length} impact{alert.fiscal_alerts_analysis.length !== 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                          
+                          <Button
+                            variant={alert.research_done ? "default" : "outline"}
+                            size="icon"
+                            onClick={() => handleResearchClick(alert)}
+                            disabled={processingIds.has(alert.id)}
+                            className={`h-10 w-10 shadow-button-modern transition-all duration-300 ${
+                              alert.research_done 
+                                ? "bg-gradient-primary hover:shadow-glow-modern" 
+                                : "glass-effect hover:bg-accent/10"
+                            }`}
+                          >
+                            {processingIds.has(alert.id) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Brain className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="space-y-4 pt-0">
+                      {/* AI Summary */}
+                      <div className="bg-background/30 rounded-xl p-4 border border-border">
+                        <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          {t('fiscalAlerts.summary')}
+                        </h4>
+                        <ul className="text-sm text-muted-foreground space-y-2">
+                          {formatSummaryPoints(alert.ai_summary)}
+                        </ul>
+                      </div>
+                      
+                      {/* Impact Analysis */}
+                      <Collapsible>
+                        <CollapsibleTrigger className="flex items-center justify-between w-full p-4 rounded-xl bg-background/20 border border-border hover:bg-background/40 transition-all duration-200 group/trigger">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-orange-500/20 to-red-600/20 rounded-xl flex items-center justify-center">
+                              <AlertTriangle className="w-4 h-4 text-orange-400" />
+                            </div>
+                            <h4 className="font-semibold text-foreground">
+                              {t('fiscalAlerts.impact')}
+                            </h4>
+                          </div>
+                          <ChevronDown className="w-5 h-5 text-muted-foreground transition-all duration-200 group-data-[state=open]/trigger:rotate-180" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-3">
+                          <div className="p-4 rounded-xl bg-background/20 border border-border">
+                            {alert.fiscal_alerts_analysis && alert.fiscal_alerts_analysis.length > 0 ? (
+                              <ul className="space-y-4">
+                                {alert.fiscal_alerts_analysis.map((analysis, index) => (
+                                  <li key={index} className="flex items-start gap-3">
+                                    <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                      <span className="w-2 h-2 bg-primary rounded-full"></span>
+                                    </div>
+                                    <div className="space-y-1 min-w-0">
+                                      <h5 className="font-bold text-foreground text-sm">
+                                        {analysis.topic}
+                                      </h5>
+                                      <p className="text-sm text-muted-foreground leading-relaxed">
+                                        {analysis.details}
+                                      </p>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {alert.ai_impact_analysis}
+                              </p>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* No Results */}
+            {!loading && filteredAlerts.length === 0 && (
+              <div className="text-center py-16">
+                <div className="w-24 h-24 bg-gradient-card rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-card-modern">
+                  <AlertTriangle className="w-12 h-12 text-muted-foreground" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground mb-4">
+                  {t('fiscalAlerts.noResults')}
+                </h3>
+                <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed mb-8">
+                  {t('fiscalAlerts.noResultsDescription')}
+                </p>
+                <Button
+                  onClick={() => {
+                    setSelectedCountry("all");
+                    setSelectedSource("all");
+                  }}
+                  className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 px-6 touch-manipulation"
+                >
+                  Reset Filters
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
