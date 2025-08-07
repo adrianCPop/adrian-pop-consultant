@@ -336,54 +336,34 @@ const InvoiceLawSection = () => {
             </Card>
           </div>
 
-          {/* Action Buttons - Mobile optimized */}
+          {/* Action Buttons - Test JSON Validation */}
           <div className="flex flex-col gap-4 mb-8">
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="text-center">
+              <p className="text-muted-foreground mb-4">
+                Test your JSON data validation or chat with the AI assistant about invoice compliance
+              </p>
               <Button
-                onClick={runValidation}
-                disabled={isLoading || rules.length === 0}
-                className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 hover:scale-105 h-12 px-8 touch-manipulation w-full sm:w-auto"
+                onClick={() => {
+                  try {
+                    JSON.parse(jsonInput);
+                    toast({
+                      title: "Valid JSON",
+                      description: "Your JSON structure is valid and ready for processing",
+                    });
+                  } catch (error) {
+                    toast({
+                      title: "Invalid JSON",
+                      description: "Please check your JSON syntax and try again",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 hover:scale-105 h-12 px-8 touch-manipulation"
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Validating...
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Run Validation
-                  </>
-                )}
+                <Play className="w-4 h-4 mr-2" />
+                Validate JSON Structure
               </Button>
-              
-              {user && (
-                <Button
-                  onClick={saveRules}
-                  variant="outline"
-                  disabled={rules.length === 0}
-                  className="h-12 px-6 touch-manipulation w-full sm:w-auto glass-effect"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save My Rules
-                </Button>
-              )}
             </div>
-
-            {/* Status Display */}
-            {result && (() => {
-              const status = getValidationStatus();
-              return status ? (
-                <div className="text-center">
-                  <Badge 
-                    variant={status.color}
-                    className="animate-fade-in transition-all duration-300 text-sm px-4 py-2"
-                  >
-                    {status.label}
-                  </Badge>
-                </div>
-              ) : null;
-            })()}
           </div>
 
           {/* Loading Skeleton */}
