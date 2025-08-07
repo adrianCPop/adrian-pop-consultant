@@ -107,7 +107,7 @@ All colors MUST be HSL.
   }
 
   .light {
-    --background: 0 0% 100%;
+    --background: 0 0% 99%;
     --foreground: 240 10% 3.9%;
 
     --card: 0 0% 100%;
@@ -116,39 +116,41 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
 
-    --primary: 217 91% 60%;
+    --primary: 217 91% 65%;
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 240 5% 96%;
+    --secondary: 240 4% 96%;
     --secondary-foreground: 240 10% 3.9%;
 
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 3.8% 45%;
+    --muted: 240 4% 96%;
+    --muted-foreground: 240 4% 50%;
 
-    --accent: 142 76% 36%;
+    --accent: 151 83% 45%;
     --accent-foreground: 0 0% 98%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 5% 91%;
-    --input: 240 5% 91%;
-    --ring: 217 91% 60%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 217 91% 65%;
 
-    --code-bg: 240 5% 96%;
-    --code-border: 240 5% 91%;
+    /* Enhanced Light Mode Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 65%), hsl(151 83% 45%));
+    --gradient-hero: linear-gradient(135deg, hsl(0 0% 99%) 0%, hsl(240 4% 96%) 50%, hsl(217 91% 65% / 0.03) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100% / 0.9), hsl(240 4% 96% / 0.6));
+    --gradient-subtle: linear-gradient(180deg, transparent, hsl(217 91% 65% / 0.01));
 
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(142 76% 36%));
-    --gradient-subtle: linear-gradient(180deg, var(--color-background), color-mix(in srgb, var(--color-background) 90%, var(--color-primary) 10%));
-
-    --shadow-glow: 0 0 40px hsl(217 91% 60% / 0.2);
-    --shadow-card: 0 1px 3px 0 hsl(0 0% 0% / 0.1), 0 1px 2px 0 hsl(0 0% 0% / 0.06);
+    --shadow-glow: 0 0 60px hsl(217 91% 65% / 0.08);
+    --shadow-card: 0 8px 32px hsl(0 0% 0% / 0.06);
+    --shadow-card-hover: 0 16px 64px hsl(0 0% 0% / 0.08);
+    --shadow-button: 0 4px 12px hsl(217 91% 65% / 0.15);
 
     /* User theme variables */
-    --color-primary: #3c83f6;
+    --color-primary: #4f94ff;
     --color-background: #ffffff;
     --color-text: #0f0f0f;
-    --color-accent: #16a249;
+    --color-accent: #2dd85b;
   }
 }
 
