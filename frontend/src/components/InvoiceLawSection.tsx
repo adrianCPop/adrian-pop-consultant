@@ -204,8 +204,8 @@ const InvoiceLawSection = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 mb-8">
-            {/* Left Column - AI Chat Bot */}
+          <div className="max-w-4xl mx-auto">
+            {/* AI Chat Bot - Full Width */}
             <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern">
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
