@@ -113,13 +113,18 @@ const InvoiceLawSection = () => {
       if (data.response) {
         responseText = data.response;
       } else if (data.message) {
-        responseText = data.message;
+        // Check if it's an error message
+        if (data.message === "Error in workflow") {
+          responseText = "I'm sorry, there seems to be an issue with my AI workflow. The system returned 'Error in workflow'. Please check the n8n workflow configuration or try a different question.";
+        } else {
+          responseText = data.message;
+        }
       } else if (data.text) {
         responseText = data.text;
       } else if (typeof data === 'string') {
         responseText = data;
       } else {
-        responseText = "I received your message but couldn't find a proper response format. Please check the n8n workflow output format.";
+        responseText = `I received an unexpected response format: ${JSON.stringify(data)}. Please check the n8n workflow output format.`;
       }
 
       const aiMessage: ChatMessage = {
