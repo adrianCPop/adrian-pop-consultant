@@ -37,31 +37,7 @@ interface ValidationResult {
   error?: string;
 }
 
-const fields = [
-  "documentType",
-  "totalAmount",
-  "currencyCode",
-  "invoiceNumber",
-  "issueDate",
-  "supplierName",
-  "buyerName",
-  "taxAmount",
-  "netAmount"
-];
 
-const operators = [
-  { value: "equals", label: "equals" },
-  { value: "contains", label: "contains" },
-  { value: "greaterThan", label: "greater than" },
-  { value: "lessThan", label: "less than" },
-  { value: "notEmpty", label: "is not empty" },
-  { value: "matches", label: "matches regex" }
-];
-
-const actions = [
-  { value: "error", label: "error" },
-  { value: "warning", label: "warning" }
-];
 
 const defaultInvoice = {
   invoice: {
