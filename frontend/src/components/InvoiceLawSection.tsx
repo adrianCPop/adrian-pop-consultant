@@ -1,18 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import JsonEditor from "@/components/JsonEditor";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Trash2, Play, Save, CheckCircle, XCircle, AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
+import { Plus, Trash2, Play, Save, CheckCircle, XCircle, AlertTriangle, ChevronDown, Loader2, MessageCircle, Brain, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { logRuleRun } from "@/integrations/supabase/ruleRuns";
-import { VALIDATE_RULES_FN } from "@/integrations/supabase/constants";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constants";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 interface Rule {
   id: string;
