@@ -281,113 +281,115 @@ const InvoiceLawSection = () => {
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 mb-8">
-            {/* Left Column - Rule Builder */}
+            {/* Left Column - AI Chat Bot */}
             <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern">
               <CardHeader className="pb-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <CardTitle className="text-foreground text-xl">Build Your Rules</CardTitle>
-                  <Button 
-                    onClick={addRule} 
-                    size="sm" 
-                    className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 touch-manipulation w-full sm:w-auto"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Rule
-                  </Button>
-                </div>
-                {rules.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {rules.length} rule{rules.length !== 1 ? 's' : ''} defined
-                  </p>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-4 max-h-96 md:max-h-none overflow-y-auto">
-                {rules.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-indigo-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <Plus className="w-8 h-8 text-blue-400" />
-                    </div>
-                    <p className="font-medium">No rules yet</p>
-                    <p className="text-sm">Click "Add Rule" to get started!</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-primary rounded-xl flex items-center justify-center shadow-glow-modern">
+                    <MessageCircle className="w-4 h-4 text-primary-foreground" />
                   </div>
-                ) : (
-                  rules.map((rule, index) => (
-                    <div key={rule.id} className="p-4 border border-border rounded-xl bg-background/50 space-y-3">
-                      {/* Rule Number */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-xs font-bold text-primary">
-                            {index + 1}
-                          </div>
-                          <span className="text-sm font-medium text-foreground">Rule {index + 1}</span>
-                        </div>
-                        <Button
-                          onClick={() => removeRule(rule.id)}
-                          size="sm"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 p-2 touch-manipulation"
+                  <div>
+                    <CardTitle className="text-foreground text-xl">AI Invoice Assistant</CardTitle>
+                    <p className="text-sm text-muted-foreground">Ask me about invoice validation, compliance, or eInvoicing</p>
+                  </div>
+                  <div className="ml-auto">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {/* Chat Messages Area */}
+                <div className="h-80 md:h-96 overflow-y-auto p-4 space-y-4 bg-background/20 border-y border-border">
+                  {chatMessages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                      <div className="w-16 h-16 bg-gradient-primary rounded-2xl flex items-center justify-center mb-4 shadow-glow-modern">
+                        <Brain className="w-8 h-8 text-primary-foreground" />
+                      </div>
+                      <p className="text-muted-foreground mb-2">Hi! I'm your AI Invoice Assistant</p>
+                      <p className="text-sm text-muted-foreground max-w-sm">
+                        Ask me anything about invoice validation, eInvoicing standards, compliance rules, or process optimization.
+                      </p>
+                    </div>
+                  ) : (
+                    chatMessages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                            message.isUser
+                              ? 'bg-gradient-primary text-primary-foreground'
+                              : 'bg-background/80 border border-border text-foreground'
+                          }`}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-
-                      {/* If clause - Mobile optimized */}
-                      <div className="space-y-3">
-                        <div className="text-sm text-muted-foreground font-medium">If:</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <Select value={rule.field} onValueChange={(value) => updateRule(rule.id, 'field', value)}>
-                            <SelectTrigger className="h-12 touch-manipulation">
-                              <SelectValue placeholder="Select field" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {fields.map(field => (
-                                <SelectItem key={field} value={field}>{field}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          
-                          <Select value={rule.operator} onValueChange={(value) => updateRule(rule.id, 'operator', value)}>
-                            <SelectTrigger className="h-12 touch-manipulation">
-                              <SelectValue placeholder="Select operator" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {operators.map(op => (
-                                <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <p className="text-sm leading-relaxed">{message.text}</p>
+                          <span className="text-xs opacity-70 mt-1 block">
+                            {format(message.timestamp, 'HH:mm')}
+                          </span>
                         </div>
-                        
-                        {rule.operator !== "notEmpty" && (
-                          <input
-                            type="text"
-                            placeholder="Enter value"
-                            value={rule.value}
-                            onChange={(e) => updateRule(rule.id, 'value', e.target.value)}
-                            className="w-full h-12 px-4 text-sm bg-background border border-input rounded-lg focus:border-primary transition-colors touch-manipulation"
-                          />
-                        )}
                       </div>
-                      
-                      {/* Then clause - Mobile optimized */}
-                      <div className="space-y-3">
-                        <div className="text-sm text-muted-foreground font-medium">Then:</div>
-                        <Select value={rule.action} onValueChange={(value) => updateRule(rule.id, 'action', value)}>
-                          <SelectTrigger className="h-12 touch-manipulation">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {actions.map(action => (
-                              <SelectItem key={action.value} value={action.value}>
-                                Show {action.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    ))
+                  )}
+                  
+                  {/* Typing Indicator */}
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-background/80 border border-border rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                          <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        </div>
                       </div>
                     </div>
-                  ))
-                )}
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Chat Input */}
+                <div className="p-4">
+                  <form onSubmit={handleChatSubmit} className="flex gap-3">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Ask about invoice validation, compliance, or eInvoicing..."
+                      disabled={isTyping}
+                      className="flex-1 h-12 px-4 rounded-xl bg-background/50 border border-border focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground touch-manipulation"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={isTyping || !chatInput.trim()}
+                      className="h-12 px-6 bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 touch-manipulation"
+                    >
+                      {isTyping ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </form>
+                  
+                  {/* Quick Actions */}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {[
+                      "What is eInvoicing?",
+                      "CFDI compliance",
+                      "Peppol BIS 3.0",
+                      "SAF-T requirements"
+                    ].map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleQuickAction(suggestion)}
+                        disabled={isTyping}
+                        className="text-xs bg-background/30 hover:bg-background/50 border border-border rounded-full px-3 py-1 text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
