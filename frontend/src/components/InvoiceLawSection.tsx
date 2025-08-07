@@ -262,47 +262,82 @@ const InvoiceLawSection = () => {
   };
 
   return (
-    <section id="invoice-law" className="py-20 bg-muted/30">
-      <div className="container mx-auto px-4">
+    <section id="invoice-law" className="py-16 md:py-24 bg-gradient-subtle">
+      <div className="container-mobile">
         <div className="max-w-7xl mx-auto">
           {/* Section Header */}
-          <div className="text-center mb-12">
-            <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
+          <div className="text-center mb-12 md:mb-16">
+            <div className="inline-flex items-center gap-2 bg-gradient-card px-4 py-2 rounded-full border border-border mb-6 glass-effect">
+              <Play className="w-4 h-4 text-accent" />
+              <span className="text-sm font-medium text-muted-foreground">Interactive Demo</span>
+            </div>
+            <h2 className="text-mobile-title font-bold text-foreground mb-4">
               Can you beat Adrian's logic?
             </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+            <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
               Build your own invoice validation rules and test them against real JSON data. 
               See if you can create logic as robust as what I've built for enterprise clients.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8 mb-8">
             {/* Left Column - Rule Builder */}
-            <Card className="bg-card/50 backdrop-blur border-border">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-foreground">Build Your Rules</CardTitle>
-                  <Button onClick={addRule} size="sm" className="bg-primary hover:bg-primary/90">
+            <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern">
+              <CardHeader className="pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <CardTitle className="text-foreground text-xl">Build Your Rules</CardTitle>
+                  <Button 
+                    onClick={addRule} 
+                    size="sm" 
+                    className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 touch-manipulation w-full sm:w-auto"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Rule
                   </Button>
                 </div>
+                {rules.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {rules.length} rule{rules.length !== 1 ? 's' : ''} defined
+                  </p>
+                )}
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 max-h-96 md:max-h-none overflow-y-auto">
                 {rules.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <p>No rules yet. Click "Add Rule" to get started!</p>
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-indigo-600/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <Plus className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <p className="font-medium">No rules yet</p>
+                    <p className="text-sm">Click "Add Rule" to get started!</p>
                   </div>
                 ) : (
-                  rules.map((rule) => (
-                    <div key={rule.id} className="p-4 border border-border rounded-lg space-y-3">
-                      {/* If clause - responsive layout */}
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                          <span className="shrink-0">if</span>
+                  rules.map((rule, index) => (
+                    <div key={rule.id} className="p-4 border border-border rounded-xl bg-background/50 space-y-3">
+                      {/* Rule Number */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-xs font-bold text-primary">
+                            {index + 1}
+                          </div>
+                          <span className="text-sm font-medium text-foreground">Rule {index + 1}</span>
+                        </div>
+                        <Button
+                          onClick={() => removeRule(rule.id)}
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 p-2 touch-manipulation"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* If clause - Mobile optimized */}
+                      <div className="space-y-3">
+                        <div className="text-sm text-muted-foreground font-medium">If:</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <Select value={rule.field} onValueChange={(value) => updateRule(rule.id, 'field', value)}>
-                            <SelectTrigger className="w-full sm:w-32">
-                              <SelectValue placeholder="field" />
+                            <SelectTrigger className="h-12 touch-manipulation">
+                              <SelectValue placeholder="Select field" />
                             </SelectTrigger>
                             <SelectContent>
                               {fields.map(field => (
@@ -310,12 +345,10 @@ const InvoiceLawSection = () => {
                               ))}
                             </SelectContent>
                           </Select>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                          
                           <Select value={rule.operator} onValueChange={(value) => updateRule(rule.id, 'operator', value)}>
-                            <SelectTrigger className="w-full sm:w-36">
-                              <SelectValue placeholder="operator" />
+                            <SelectTrigger className="h-12 touch-manipulation">
+                              <SelectValue placeholder="Select operator" />
                             </SelectTrigger>
                             <SelectContent>
                               {operators.map(op => (
@@ -323,43 +356,34 @@ const InvoiceLawSection = () => {
                               ))}
                             </SelectContent>
                           </Select>
-                          
-                          {rule.operator !== "notEmpty" && (
-                            <input
-                              type="text"
-                              placeholder="value"
-                              value={rule.value}
-                              onChange={(e) => updateRule(rule.id, 'value', e.target.value)}
-                              className="w-full sm:flex-1 px-3 py-2 text-sm bg-background border border-input rounded-md"
-                            />
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Then clause - responsive layout */}
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="shrink-0">then</span>
-                          <Select value={rule.action} onValueChange={(value) => updateRule(rule.id, 'action', value)}>
-                            <SelectTrigger className="w-full sm:w-24">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {actions.map(action => (
-                                <SelectItem key={action.value} value={action.value}>{action.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
                         </div>
                         
-                        <Button
-                          onClick={() => removeRule(rule.id)}
-                          size="sm"
-                          variant="outline"
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {rule.operator !== "notEmpty" && (
+                          <input
+                            type="text"
+                            placeholder="Enter value"
+                            value={rule.value}
+                            onChange={(e) => updateRule(rule.id, 'value', e.target.value)}
+                            className="w-full h-12 px-4 text-sm bg-background border border-input rounded-lg focus:border-primary transition-colors touch-manipulation"
+                          />
+                        )}
+                      </div>
+                      
+                      {/* Then clause - Mobile optimized */}
+                      <div className="space-y-3">
+                        <div className="text-sm text-muted-foreground font-medium">Then:</div>
+                        <Select value={rule.action} onValueChange={(value) => updateRule(rule.id, 'action', value)}>
+                          <SelectTrigger className="h-12 touch-manipulation">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {actions.map(action => (
+                              <SelectItem key={action.value} value={action.value}>
+                                Show {action.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   ))
@@ -368,28 +392,31 @@ const InvoiceLawSection = () => {
             </Card>
 
             {/* Right Column - JSON Input */}
-            <Card className="bg-card/50 backdrop-blur border-border">
-              <CardHeader>
-                <CardTitle className="text-foreground">Invoice JSON Data</CardTitle>
+            <Card className="bg-gradient-card backdrop-blur-sm border-border shadow-card-modern">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-foreground text-xl">Invoice JSON Data</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Paste your invoice JSON here or use the sample data
+                </p>
               </CardHeader>
               <CardContent>
                 <JsonEditor
                   placeholder={`Enter your invoice JSON here, e.g.:\n{\n  "documentType": "invoice",\n  "totalAmount": 1000.00,\n  "currencyCode": "EUR",\n  "invoiceNumber": "INV-2024-001",\n  "issueDate": "2024-01-15",\n  "supplierName": "ACME Corp",\n  "buyerName": "Example Ltd",\n  "taxAmount": 200.00,\n  "netAmount": 800.00\n}`}
                   value={jsonInput}
                   onChange={setJsonInput}
-                  className="min-h-[300px]"
+                  className="min-h-[250px] md:min-h-[350px] touch-manipulation"
                 />
               </CardContent>
             </Card>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-            <div className="flex items-center gap-4">
+          {/* Action Buttons - Mobile optimized */}
+          <div className="flex flex-col gap-4 mb-8">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button
                 onClick={runValidation}
                 disabled={isLoading || rules.length === 0}
-                className="bg-primary hover:bg-primary/90 px-8"
+                className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 hover:scale-105 h-12 px-8 touch-manipulation w-full sm:w-auto"
               >
                 {isLoading ? (
                   <>
@@ -404,30 +431,33 @@ const InvoiceLawSection = () => {
                 )}
               </Button>
               
-              {/* Status Badge */}
-              {result && (() => {
-                const status = getValidationStatus();
-                return status ? (
+              {user && (
+                <Button
+                  onClick={saveRules}
+                  variant="outline"
+                  disabled={rules.length === 0}
+                  className="h-12 px-6 touch-manipulation w-full sm:w-auto glass-effect"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save My Rules
+                </Button>
+              )}
+            </div>
+
+            {/* Status Display */}
+            {result && (() => {
+              const status = getValidationStatus();
+              return status ? (
+                <div className="text-center">
                   <Badge 
                     variant={status.color}
-                    className="animate-fade-in transition-all duration-300"
+                    className="animate-fade-in transition-all duration-300 text-sm px-4 py-2"
                   >
                     {status.label}
                   </Badge>
-                ) : null;
-              })()}
-            </div>
-            
-            {user && (
-              <Button
-                onClick={saveRules}
-                variant="outline"
-                disabled={rules.length === 0}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Save My Rules
-              </Button>
-            )}
+                </div>
+              ) : null;
+            })()}
           </div>
 
           {/* Loading Skeleton */}
