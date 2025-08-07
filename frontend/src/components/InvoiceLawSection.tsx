@@ -173,131 +173,16 @@ const InvoiceLawSection = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const addRule = () => {
-    const newRule: Rule = {
-      id: Date.now().toString(),
-      field: "",
-      operator: "",
-      value: "",
-      action: "error"
-    };
-    setRules([...rules, newRule]);
-  };
-
-  const removeRule = (id: string) => {
-    setRules(rules.filter(rule => rule.id !== id));
-  };
-
-  const updateRule = (id: string, field: keyof Rule, value: string) => {
-    setRules(rules.map(rule => 
-      rule.id === id ? { ...rule, [field]: value } : rule
-    ));
-  };
-
-  const runValidation = async () => {
-    if (!jsonInput.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter invoice JSON data",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (rules.length === 0) {
-      toast({
-        title: "Error", 
-        description: "Please add at least one rule",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const incompleteRule = rules.find(rule => 
-      !rule.field || !rule.operator || (!rule.value && rule.operator !== "notEmpty")
-    );
-
-    if (incompleteRule) {
-      toast({
-        title: "Error",
-        description: "Please complete all rule fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    setResult(null);
-
-    try {
-      const { data, error } = await supabase.functions.invoke(VALIDATE_RULES_FN, {
-        body: {
-          rules,
-          invoice: JSON.parse(jsonInput)
-        }
-      });
-
-      if (error) throw error;
-      
-      setResult(data);
-      
-      // Enhanced toast messaging based on new response format
-      const status = data.isValid ? 
-        (data.warnings?.length > 0 ? "Validation completed with warnings" : "Validation passed") :
-        "Validation failed";
-      
-      toast({
-        title: status,
-        description: data.isValid ? 
-          `Invoice is valid${data.warnings?.length > 0 ? ` (${data.warnings.length} warnings)` : ''}` :
-          `${data.errors?.length || 0} errors found`,
-        variant: data.isValid ? "default" : "destructive"
-      });
-
-      // Store the validation run in Supabase
-      await logRuleRun({
-        invoice: JSON.parse(jsonInput),
-        rules,
-        result: data,
-        ...(user ? { user_id: user.id } : {})
-      });
-
-    } catch (error: unknown) {
-      console.error("Validation error:", error);
-      setResult({
-        isValid: false,
-        errors: [error instanceof Error ? error.message : "Failed to validate rules"],
-        warnings: [],
-        ruleLog: []
-      });
-      toast({
-        title: "Validation Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to validate rules",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveRules = async () => {
-    if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please log in to save your rules",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // TODO: Implement rule saving to database
-    toast({
-      title: "Feature Coming Soon",
-      description: "Rule saving will be available once user profiles are set up",
-    });
+  // Helper function to get validation status
+  const getValidationStatus = () => {
+    if (!result) return null;
+    
+    const hasErrors = result.errors?.length > 0 || result.isValid === false;
+    const hasWarnings = result.warnings?.length > 0;
+    
+    if (hasErrors) return { type: 'error', label: '❌ Errors', color: 'destructive' } as const;
+    if (hasWarnings) return { type: 'warning', label: '⚠ Warnings', color: 'secondary' } as const;
+    return { type: 'success', label: '✓ Valid', color: 'default' } as const;
   };
 
   return (
