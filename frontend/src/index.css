@@ -161,6 +161,26 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Enhanced Mobile Scroll Behavior */
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Mobile-First Typography */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  /* Enhanced Touch Targets for Mobile */
+  button, [role="button"], input[type="submit"], input[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
   }
 
   /* Prevent layout shift when modal opens */
@@ -175,5 +195,192 @@ All colors MUST be HSL.
     padding-right: 0 !important;
     margin-right: 0 !important;
     overflow: hidden !important;
+  }
+}
+
+@layer utilities {
+  /* Mobile-First Container System */
+  .container-mobile {
+    width: 100%;
+    padding-left: var(--mobile-padding);
+    padding-right: var(--mobile-padding);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (min-width: 768px) {
+    .container-mobile {
+      padding-left: var(--desktop-padding);
+      padding-right: var(--desktop-padding);
+      max-width: var(--desktop-max-width);
+    }
+  }
+
+  /* Modern Gradients */
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .bg-gradient-card {
+    background: var(--gradient-card);
+  }
+
+  .bg-gradient-subtle {
+    background: var(--gradient-subtle);
+  }
+
+  /* Enhanced Shadows */
+  .shadow-card-modern {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-card-hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .shadow-button-modern {
+    box-shadow: var(--shadow-button);
+  }
+
+  .shadow-glow-modern {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Mobile-Optimized Animations */
+  .animate-fade-in {
+    animation: fadeIn var(--duration-normal) ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slideUp var(--duration-normal) ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn var(--duration-normal) ease-out forwards;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Smooth Transitions for Mobile */
+  .transition-modern {
+    transition: all var(--duration-normal) cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-fast {
+    transition: all var(--duration-fast) cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Mobile-First Grid Systems */
+  .grid-mobile-1 {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .grid-mobile-1 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .grid-mobile-1 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  /* Enhanced Mobile Touch Interactions */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  .tap-highlight-none {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Modern Glassmorphism Effects */
+  .glass-effect {
+    backdrop-filter: blur(12px);
+    background: hsl(var(--card) / 0.8);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  /* Mobile-First Text Sizes */
+  .text-mobile-hero {
+    font-size: 2.5rem;
+    line-height: 1.1;
+  }
+
+  @media (min-width: 768px) {
+    .text-mobile-hero {
+      font-size: 3.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .text-mobile-hero {
+      font-size: 4.5rem;
+    }
+  }
+
+  .text-mobile-title {
+    font-size: 1.875rem;
+    line-height: 1.2;
+  }
+
+  @media (min-width: 768px) {
+    .text-mobile-title {
+      font-size: 2.25rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .text-mobile-title {
+      font-size: 2.75rem;
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
   }
 }
