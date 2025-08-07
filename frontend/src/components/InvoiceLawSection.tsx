@@ -318,36 +318,6 @@ const InvoiceLawSection = () => {
             </Card>
           </div>
 
-          {/* Action Buttons - Test JSON Validation */}
-          <div className="flex flex-col gap-4 mb-8">
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">
-                Test your JSON data validation or chat with the AI assistant about invoice compliance
-              </p>
-              <Button
-                onClick={() => {
-                  try {
-                    JSON.parse(jsonInput);
-                    toast({
-                      title: "Valid JSON",
-                      description: "Your JSON structure is valid and ready for processing",
-                    });
-                  } catch (error) {
-                    toast({
-                      title: "Invalid JSON",
-                      description: "Please check your JSON syntax and try again",
-                      variant: "destructive"
-                    });
-                  }
-                }}
-                className="bg-gradient-primary hover:shadow-glow-modern transition-all duration-300 hover:scale-105 h-12 px-8 touch-manipulation"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Validate JSON Structure
-              </Button>
-            </div>
-          </div>
-
           {/* Loading Skeleton */}
           {isLoading && (
             <Card className="bg-card/50 backdrop-blur border-border animate-fade-in">
