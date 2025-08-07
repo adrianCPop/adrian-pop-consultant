@@ -74,10 +74,13 @@ const InvoiceLawSection = () => {
     };
 
     setChatMessages(prev => [...prev, userMessage]);
+    const currentInput = chatInput;
     setChatInput("");
     setIsTyping(true);
 
     try {
+      console.log('Sending message to n8n:', currentInput);
+      
       // Your n8n webhook URL
       const n8nWebhookUrl = "https://n8n.srv923194.hstgr.cloud/webhook/e1fbbe47-646f-4864-bd4e-666f6866430a/chat";
       
@@ -87,33 +90,68 @@ const InvoiceLawSection = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: chatInput,
+          message: currentInput,
           sessionId: user?.id || 'anonymous',
           timestamp: new Date().toISOString()
         }),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
       if (!response.ok) {
-        throw new Error('Failed to get response from AI');
+        const errorText = await response.text();
+        console.error('N8N response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to get response from AI'}`);
       }
 
       const data = await response.json();
+      console.log('N8N response data:', data);
       
+      // Handle different possible response formats from n8n
+      let responseText = '';
+      if (data.response) {
+        responseText = data.response;
+      } else if (data.message) {
+        responseText = data.message;
+      } else if (data.text) {
+        responseText = data.text;
+      } else if (typeof data === 'string') {
+        responseText = data;
+      } else {
+        responseText = "I received your message but couldn't find a proper response format. Please check the n8n workflow output format.";
+      }
+
       const aiMessage: ChatMessage = {
-        text: data.response || "I'm sorry, I couldn't process that request. Please try again.",
+        text: responseText,
         isUser: false,
         timestamp: new Date()
       };
 
       setChatMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: ChatMessage = {
-        text: "I'm experiencing some technical difficulties. Please try again later or contact support.",
+      console.error('Chat error details:', error);
+      
+      let errorMessage = "I'm experiencing some technical difficulties. ";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('fetch')) {
+          errorMessage += "Unable to connect to the AI service. Please check your internet connection and try again.";
+        } else if (error.message.includes('HTTP')) {
+          errorMessage += `Server responded with: ${error.message}. Please try again later.`;
+        } else {
+          errorMessage += error.message;
+        }
+      } else {
+        errorMessage += "An unexpected error occurred. Please try again later or contact support.";
+      }
+      
+      const aiErrorMessage: ChatMessage = {
+        text: errorMessage,
         isUser: false,
         timestamp: new Date()
       };
-      setChatMessages(prev => [...prev, errorMessage]);
+      setChatMessages(prev => [...prev, aiErrorMessage]);
     } finally {
       setIsTyping(false);
     }
