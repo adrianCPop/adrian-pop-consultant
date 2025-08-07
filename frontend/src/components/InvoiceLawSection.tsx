@@ -71,10 +71,6 @@ const defaultInvoice = {
 };
 
 const InvoiceLawSection = () => {
-  const [jsonInput, setJsonInput] = useState(
-    JSON.stringify(defaultInvoice, null, 2)
-  );
-  const [result, setResult] = useState<ValidationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
