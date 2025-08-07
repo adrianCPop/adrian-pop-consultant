@@ -112,16 +112,76 @@ const InvoiceLawSection = () => {
   
   const { toast } = useToast();
 
-  // Helper function to get validation status
-  const getValidationStatus = () => {
-    if (!result) return null;
-    
-    const hasErrors = result.errors?.length > 0 || result.isValid === false;
-    const hasWarnings = result.warnings?.length > 0;
-    
-    if (hasErrors) return { type: 'error', label: '❌ Errors', color: 'destructive' } as const;
-    if (hasWarnings) return { type: 'warning', label: '⚠ Warnings', color: 'secondary' } as const;
-    return { type: 'success', label: '✓ Valid', color: 'default' } as const;
+  // Scroll to bottom of chat
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages]);
+
+  // Handle chat form submission
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isTyping) return;
+
+    const userMessage: ChatMessage = {
+      text: chatInput,
+      isUser: true,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInput("");
+    setIsTyping(true);
+
+    try {
+      // Replace this URL with your actual n8n webhook URL
+      const n8nWebhookUrl = "YOUR_N8N_WEBHOOK_URL_HERE"; // You'll need to provide this
+      
+      const response = await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: chatInput,
+          sessionId: user?.id || 'anonymous',
+          timestamp: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from AI');
+      }
+
+      const data = await response.json();
+      
+      const aiMessage: ChatMessage = {
+        text: data.response || "I'm sorry, I couldn't process that request. Please try again.",
+        isUser: false,
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage: ChatMessage = {
+        text: "I'm experiencing some technical difficulties. Please try again later or contact support.",
+        isUser: false,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Handle quick action buttons
+  const handleQuickAction = (suggestion: string) => {
+    if (isTyping) return;
+    setChatInput(suggestion);
   };
 
   useEffect(() => {
