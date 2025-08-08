@@ -37,7 +37,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
+if ! command -v docker compose &> /dev/null; then
     print_error "Docker Compose is not installed. Please install Docker Compose first."
     exit 1
 fi
@@ -71,7 +71,7 @@ mkdir -p backups
 
 # Stop existing containers
 print_status "Stopping existing containers..."
-docker-compose down || true
+docker compose down || true
 
 # Remove old images (optional, uncomment if needed)
 # print_status "Removing old Docker images..."
@@ -80,10 +80,10 @@ docker-compose down || true
 # Build and start containers
 print_status "Building and starting containers..."
 if [ "$ENVIRONMENT" = "production" ]; then
-    docker-compose -f docker-compose.yml build --no-cache
-    docker-compose -f docker-compose.yml up -d
+    docker compose -f docker-compose.yml build --no-cache
+    docker compose -f docker-compose.yml up -d
 else
-    docker-compose up -d --build
+    docker compose up -d --build
 fi
 
 # Wait for services to be ready
@@ -94,7 +94,7 @@ sleep 30
 print_status "Running health checks..."
 
 # Check MongoDB
-if docker-compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
+if docker compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
     print_status "✅ MongoDB is healthy"
 else
     print_error "❌ MongoDB health check failed"
@@ -106,7 +106,7 @@ if curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
 else
     print_error "❌ Backend health check failed"
     print_status "Backend logs:"
-    docker-compose logs --tail=20 backend
+    docker compose logs --tail=20 backend
 fi
 
 # Check Frontend
@@ -115,12 +115,12 @@ if curl -f -s http://localhost:3000 > /dev/null 2>&1; then
 else
     print_error "❌ Frontend health check failed"
     print_status "Frontend logs:"
-    docker-compose logs --tail=20 frontend
+    docker compose logs --tail=20 frontend
 fi
 
 # Show container status
 print_status "Container status:"
-docker-compose ps
+docker compose ps
 
 # Show useful information
 echo ""
