@@ -1,6 +1,8 @@
 # Development overrides for docker-compose
 # This file is automatically merged with docker-compose.yml in development
 
+# Development overrides for docker-compose
+# This file is automatically merged with docker-compose.yml in development
 
 services:
   backend:
@@ -11,16 +13,18 @@ services:
     volumes:
       - ./backend:/app
     ports:
-      - "8001:8000"  # Different port for development
+      - "${BACKEND_PORT:-8002}:8000"  # Use environment variable for port
 
   frontend:
     environment:
       - NODE_ENV=development
     ports:
-      - "3001:80"  # Different port for development
+      - "${FRONTEND_PORT:-3000}:80"  # Use environment variable for port
 
   nginx:
     ports:
-      - "8080:80"  # Different port for development
+      - "${NGINX_HTTP_PORT:-8080}:80"  # Use environment variable for port
     volumes:
       - ./nginx/nginx-dev.conf:/etc/nginx/nginx.conf:ro
+    profiles:
+      - nginx  # Only start with --profile nginx
