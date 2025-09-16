@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from typing import List
 import logging
-from ..models.article import MediumArticle, ArticlesResponse
-from ..services.medium_service import medium_service
+from models.article import MediumArticle, ArticlesResponse
+from services.medium_service import medium_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/articles", tags=["articles"])
