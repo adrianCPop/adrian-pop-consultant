@@ -90,6 +90,12 @@ async def get_status_checks():
         logger.error(f"Error fetching status checks: {e}")
         raise
 
+# Import and include the articles router
+from routes.articles import router as articles_router
+
+# Add articles router to the main api router
+api_router.include_router(articles_router)
+
 # Include the router in the main app
 app.include_router(api_router)
 
