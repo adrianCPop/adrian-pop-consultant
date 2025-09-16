@@ -15,6 +15,12 @@ export default defineConfig(({ mode }) => ({
     host: '0.0.0.0', // Explicitly bind to all interfaces
     allowedHosts: true
   },
+  
+  // Environment variables configuration
+  define: {
+    'process.env.REACT_APP_BACKEND_URL': JSON.stringify(process.env.REACT_APP_BACKEND_URL),
+  },
+  
   plugins: [
     react(),
     mode === 'development' &&
