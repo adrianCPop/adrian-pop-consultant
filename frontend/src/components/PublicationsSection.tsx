@@ -26,6 +26,8 @@ const PublicationsSection = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [articlesPerPage] = useState(3); // Show 3 articles per page
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://medynamic.preview.emergentagent.com';
 
