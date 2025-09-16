@@ -184,8 +184,8 @@ const PublicationsSection = () => {
                 </div>
               )}
 
-              {/* Dynamic Articles */}
-              {articles.map((article, index) => {
+              {/* Dynamic Articles - Paginated */}
+              {currentArticles.map((article, index) => {
                 // Define different gradient colors for visual variety
                 const gradientColors = [
                   "from-purple-500/20 to-pink-600/20",
