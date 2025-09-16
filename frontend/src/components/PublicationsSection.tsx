@@ -22,6 +22,34 @@ interface ArticlesResponse {
 const PublicationsSection = () => {
   const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(false);
+  const [articles, setArticles] = useState<MediumArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+
+  const fetchArticles = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`${BACKEND_URL}/api/articles/`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data: ArticlesResponse = await response.json();
+      setArticles(data.articles);
+      setLastUpdated(data.last_updated);
+    } catch (err) {
+      console.error('Failed to fetch articles:', err);
+      setError('Failed to load articles. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -38,6 +66,28 @@ const PublicationsSection = () => {
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    fetchArticles();
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const cleanDescription = (description: string | undefined, maxLength: number = 200) => {
+    if (!description) return '';
+    // Remove HTML tags
+    const cleanText = description.replace(/<[^>]*>/g, '');
+    return cleanText.length > maxLength 
+      ? `${cleanText.substring(0, maxLength)}...` 
+      : cleanText;
+  };
 
   return (
     <section id="publications" className="py-16 md:py-24 bg-secondary/20">
