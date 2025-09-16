@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ThemeEditor from "./pages/ThemeEditor";
 import FiscalAlerts from "./pages/FiscalAlerts";
+import ResearchModalDemo from "./pages/ResearchModalDemo";
 import { TranslationProvider } from "@/components/TranslationProvider";
 
 const queryClient = new QueryClient();
