@@ -334,34 +334,43 @@ const PublicationsSection = () => {
           )}
 
           {/* Call to Action */}
-          <div className={`text-center mt-12 transition-all duration-800 delay-300 ${
-            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+          {!loading && !error && articles.length > 0 && (
+            <div className={`text-center mt-16 transition-all duration-800 delay-300 ${
+              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+                <button 
+                  onClick={fetchArticles}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 bg-secondary/50 hover:bg-secondary/70 border border-border px-4 py-2 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Refresh Articles</span>
+                </button>
+                
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>•</span>
+                    <span>Page {currentPage} of {totalPages}</span>
+                  </div>
+                )}
+              </div>
+              
+              <p className="text-muted-foreground mb-4">
+                Want to discuss technical writing or collaboration opportunities?
+              </p>
               <button 
-                onClick={fetchArticles}
-                disabled={loading}
-                className="inline-flex items-center gap-2 bg-secondary/50 hover:bg-secondary/70 border border-border px-4 py-2 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  const element = document.getElementById('contact');
+                  element?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="inline-flex items-center gap-2 text-primary hover:text-accent transition-colors duration-300 font-medium touch-manipulation"
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>Refresh Articles</span>
+                <span>Let's Connect</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-            
-            <p className="text-muted-foreground mb-4">
-              Want to discuss technical writing or collaboration opportunities?
-            </p>
-            <button 
-              onClick={() => {
-                const element = document.getElementById('contact');
-                element?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="inline-flex items-center gap-2 text-primary hover:text-accent transition-colors duration-300 font-medium touch-manipulation"
-            >
-              <span>Let's Connect</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </section>
