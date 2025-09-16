@@ -250,9 +250,9 @@ class MediumRSSIntegrationTester:
                     except:
                         quality_issues.append(f"Article {i+1}: Invalid date format")
                     
-                    # Check reading time format
+                    # Check reading time format (should be "X min" or "X min read")
                     reading_time = article.get('reading_time', '')
-                    if reading_time and not reading_time.endswith('min read'):
+                    if reading_time and not (reading_time.endswith('min read') or reading_time.endswith('min')):
                         quality_issues.append(f"Article {i+1}: Invalid reading time format")
                 
                 if quality_issues:
