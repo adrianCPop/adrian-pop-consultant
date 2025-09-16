@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Mobile-friendly UI upgrade with modern UX design inspired by tech startup portfolios
+user_problem_statement: Dynamic Medium articles integration - Replace hardcoded articles with live RSS feed from @adrian.c.pop
 
 backend:
   - task: "API endpoints for contact and status checks"
