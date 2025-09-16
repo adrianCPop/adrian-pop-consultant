@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { ExternalLink, BookOpen, Calendar, ArrowRight, RefreshCw } from "lucide-react";
+import { ExternalLink, BookOpen, Calendar, ArrowRight, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useEffect } from "react";
 
