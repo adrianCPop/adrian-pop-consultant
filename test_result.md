@@ -253,6 +253,18 @@ frontend:
         agent: "main"
         comment: "Added pagination functionality displaying 3 articles per page with Previous/Next navigation controls, page indicators, and pagination info. Tested successfully - page 1 shows first 3 articles, page 2 shows remaining 2 articles. Smooth page transitions with automatic scroll to section. Full pagination controls with visual feedback."
 
+  - task: "Improved Advanced Research Modal for Dark Mode"
+    implemented: true
+    working: true
+    file: "ResearchModal.tsx, index.css"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Completely redesigned Advanced Research modal to fix dark mode readability issues. Added comprehensive CSS styling for all HTML elements (h1-h6, p, lists, tables, code, blockquotes), copy-to-clipboard functionality, improved header with icon, larger modal size, enhanced typography, and professional styling. Tested with demo page - all text is clearly readable on dark background, proper contrast ratios, and all styling elements working correctly."
+
   - task: "Mobile-friendly contact section"
     implemented: true
     working: true
