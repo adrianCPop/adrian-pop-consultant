@@ -238,17 +238,17 @@ frontend:
         agent: "main"
         comment: "Added 5-star rating, LinkedIn verification badge, enhanced layout with social proof metrics"
 
-  - task: "Modern publications section"
+  - task: "Dynamic Medium publications section"
     implemented: true
     working: true
     file: "PublicationsSection.tsx"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Redesigned with enhanced card layout, coming soon previews, and better mobile responsiveness"
+        comment: "Completely replaced hardcoded articles with dynamic Medium RSS integration. Now fetches live articles from @adrian.c.pop Medium feed with loading states, error handling, refresh functionality, and responsive design. Shows 5 latest articles with proper metadata including reading time, tags, and publication dates."
 
   - task: "Mobile-friendly contact section"
     implemented: true
