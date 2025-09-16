@@ -7,7 +7,7 @@ from datetime import datetime
 from dateutil import parser as date_parser
 from typing import List, Optional
 import logging
-from ..models.article import MediumArticle
+from models.article import MediumArticle
 
 logger = logging.getLogger(__name__)
 
