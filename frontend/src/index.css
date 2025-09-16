@@ -384,3 +384,160 @@ All colors MUST be HSL.
     transform: translateY(-10px);
   }
 }
+
+/* Research Modal Content Styling - Dark Mode Optimized */
+.research-content {
+  /* Force all text elements to use theme colors */
+  color: hsl(var(--foreground) / 0.8) !important;
+}
+
+.research-content * {
+  /* Override any inline styles that might conflict with dark mode */
+  color: inherit !important;
+  background-color: transparent !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.research-content h1,
+.research-content h2,
+.research-content h3,
+.research-content h4,
+.research-content h5,
+.research-content h6 {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  margin-top: 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.research-content h1 {
+  font-size: 1.875rem !important;
+  border-bottom: 2px solid hsl(var(--border) / 0.3) !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.research-content h2 {
+  font-size: 1.5rem !important;
+  color: hsl(var(--accent)) !important;
+}
+
+.research-content h3 {
+  font-size: 1.25rem !important;
+  color: hsl(var(--foreground) / 0.9) !important;
+}
+
+.research-content p {
+  color: hsl(var(--foreground) / 0.8) !important;
+  line-height: 1.7 !important;
+  margin-bottom: 1rem !important;
+}
+
+.research-content strong,
+.research-content b {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600 !important;
+}
+
+.research-content em,
+.research-content i {
+  color: hsl(var(--foreground) / 0.7) !important;
+  font-style: italic !important;
+}
+
+.research-content ul,
+.research-content ol {
+  margin: 1rem 0 !important;
+  padding-left: 1.5rem !important;
+}
+
+.research-content li {
+  color: hsl(var(--foreground) / 0.8) !important;
+  margin-bottom: 0.5rem !important;
+  line-height: 1.6 !important;
+}
+
+.research-content blockquote {
+  border-left: 4px solid hsl(var(--accent)) !important;
+  background-color: hsl(var(--secondary) / 0.2) !important;
+  padding: 1rem !important;
+  margin: 1rem 0 !important;
+  font-style: italic !important;
+  color: hsl(var(--foreground) / 0.7) !important;
+  border-radius: 0.5rem !important;
+}
+
+.research-content code {
+  background-color: hsl(var(--secondary) / 0.3) !important;
+  color: hsl(var(--accent)) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.375rem !important;
+  font-size: 0.875rem !important;
+  font-family: 'JetBrains Mono', 'Monaco', 'Menlo', monospace !important;
+}
+
+.research-content pre {
+  background-color: hsl(var(--secondary) / 0.2) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.5rem !important;
+  padding: 1rem !important;
+  overflow-x: auto !important;
+  margin: 1rem 0 !important;
+}
+
+.research-content pre code {
+  background-color: transparent !important;
+  padding: 0 !important;
+  color: hsl(var(--foreground) / 0.9) !important;
+}
+
+.research-content a {
+  color: hsl(var(--accent)) !important;
+  text-decoration: underline !important;
+  text-decoration-color: hsl(var(--accent) / 0.3) !important;
+  transition: text-decoration-color 0.3s ease !important;
+}
+
+.research-content a:hover {
+  text-decoration-color: hsl(var(--accent) / 0.6) !important;
+}
+
+.research-content table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin: 1.5rem 0 !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.research-content th {
+  background-color: hsl(var(--secondary) / 0.3) !important;
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600 !important;
+  padding: 0.75rem 1rem !important;
+  text-align: left !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+.research-content td {
+  color: hsl(var(--foreground) / 0.8) !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid hsl(var(--border) / 0.3) !important;
+}
+
+.research-content hr {
+  border: none !important;
+  height: 1px !important;
+  background-color: hsl(var(--border) / 0.5) !important;
+  margin: 2rem 0 !important;
+}
+
+/* Special handling for any remaining inline styles */
+.research-content [style*="color"] {
+  color: hsl(var(--foreground) / 0.8) !important;
+}
+
+.research-content [style*="background"] {
+  background-color: transparent !important;
+}
