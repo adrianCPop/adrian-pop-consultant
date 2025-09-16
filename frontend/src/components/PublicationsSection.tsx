@@ -27,7 +27,7 @@ const PublicationsSection = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+  const BACKEND_URL = import.meta.env.VITE_REACT_APP_BACKEND_URL || 'https://medynamic.preview.emergentagent.com';
 
   const fetchArticles = async () => {
     try {
