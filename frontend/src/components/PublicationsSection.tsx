@@ -1,7 +1,23 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { ExternalLink, BookOpen, Calendar, ArrowRight } from "lucide-react";
+import { ExternalLink, BookOpen, Calendar, ArrowRight, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useEffect } from "react";
+
+interface MediumArticle {
+  title: string;
+  description?: string;
+  url: string;
+  published_date: string;
+  reading_time?: string;
+  tags?: string[];
+}
+
+interface ArticlesResponse {
+  articles: MediumArticle[];
+  total_count: number;
+  last_updated: string;
+  source: string;
+}
 
 const PublicationsSection = () => {
   const { t } = useTranslation();
