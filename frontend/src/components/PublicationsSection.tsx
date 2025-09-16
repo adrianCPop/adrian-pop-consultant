@@ -91,6 +91,36 @@ const PublicationsSection = () => {
       : cleanText;
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(articles.length / articlesPerPage);
+  const startIndex = (currentPage - 1) * articlesPerPage;
+  const endIndex = startIndex + articlesPerPage;
+  const currentArticles = articles.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      // Scroll to publications section when changing pages
+      const element = document.getElementById('publications');
+      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const goToPreviousPage = () => {
+    goToPage(currentPage - 1);
+  };
+
+  const goToNextPage = () => {
+    goToPage(currentPage + 1);
+  };
+
+  // Reset to first page when new articles are loaded
+  useEffect(() => {
+    if (articles.length > 0) {
+      setCurrentPage(1);
+    }
+  }, [articles.length]);
+
   return (
     <section id="publications" className="py-16 md:py-24 bg-secondary/20">
       <div className="container-mobile">
