@@ -1,6 +1,8 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect } from "react";
+import { X, ExternalLink, Copy, Check } from "lucide-react";
+import { useState } from "react";
 
 interface ResearchModalProps {
   open: boolean;
