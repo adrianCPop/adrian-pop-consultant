@@ -15,6 +15,8 @@ const ResearchModal = ({
   onClose,
   htmlContent
 }: ResearchModalProps) => {
+  const [copied, setCopied] = useState(false);
+
   // Disable body scroll when modal is open
   useEffect(() => {
     if (open) {
@@ -30,6 +32,31 @@ const ResearchModal = ({
       document.body.classList.remove('overflow-hidden');
     };
   }, [open]);
+
+  // Clean HTML content for better rendering
+  const cleanHtmlContent = (html: string) => {
+    // Remove any inline styles that might conflict with dark mode
+    return html
+      .replace(/style="[^"]*"/gi, '')
+      .replace(/color:\s*[^;]*;/gi, '')
+      .replace(/background-color:\s*[^;]*;/gi, '')
+      .replace(/background:\s*[^;]*;/gi, '');
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      // Extract text content from HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlContent;
+      const textContent = tempDiv.textContent || tempDiv.innerText || '';
+      
+      await navigator.clipboard.writeText(textContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
