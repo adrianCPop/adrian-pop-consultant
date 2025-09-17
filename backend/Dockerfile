@@ -1,35 +1,40 @@
-# Use Python 3.11 slim image
+# backend/Dockerfile
+
+# 1) Base
 FROM python:3.11-slim
 
-# Set working directory
+# 2) Env
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# 3) Workdir
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# 4) System deps (only what's needed to build wheels)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
-    && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file
+# 5) Python deps
 COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
+# 6) App code
 COPY . .
 
-# Create non-root user for security
+# 7) Non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port 8000
+# 8) Port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# 9) Healthcheck (Python; no curl needed)
+# Make sure server.py exposes GET /health returning 200
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)"
 
-# Start the application
+# 10) Entrypoint
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

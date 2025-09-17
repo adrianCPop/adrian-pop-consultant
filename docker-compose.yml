@@ -1,106 +1,68 @@
+version: "3.9"
+
 services:
-  # MongoDB Database
   mongodb:
     image: mongo:7.0
     container_name: portfolio-mongodb
     restart: unless-stopped
+    ports:
+      - "${MONGODB_PORT:-27018}:27017"   # host:container
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
     volumes:
-      - mongodb_data:/data/db
+      - mongo_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - app-network
-    ports:
-      - "${MONGODB_PORT:-27018}:27017"
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
-  # FastAPI Backend
   backend:
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
+    image: adrian-pop-consultant-backend
     container_name: portfolio-backend
     restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8002}:8000"     # host:container
     environment:
-      - MONGO_URL=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin
-      - DB_NAME=${MONGO_DATABASE}
-      - SECRET_KEY=${SECRET_KEY}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - ENVIRONMENT=production
+      # Use your .env values directly
+      MONGO_URL: ${MONGO_URL}            # already URL-encoded (+ as %2B) — do NOT re-encode
+      MONGO_DB: ${DB_NAME}               # server.py expects MONGO_DB
+      PYTHONUNBUFFERED: "1"
+      ENVIRONMENT: ${ENVIRONMENT:-production}
     depends_on:
       mongodb:
         condition: service_healthy
     networks:
       - app-network
-    volumes:
-      - ./backend:/app
-    ports:
-      - "${BACKEND_PORT:-8002}:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request,sys\nsys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)\nPY"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
 
-  # React Frontend
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
+    image: adrian-pop-consultant-frontend
     container_name: portfolio-frontend
     restart: unless-stopped
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:${BACKEND_PORT:-8002}
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - app-network
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Nginx Reverse Proxy (optional - you have Traefik)
-  nginx:
-    image: nginx:alpine
-    container_name: portfolio-nginx
-    restart: unless-stopped
-    ports:
-      - "${NGINX_HTTP_PORT:-8080}:80"
-      - "${NGINX_HTTPS_PORT:-8443}:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - "${FRONTEND_PORT:-3000}:80"      # adjust if you serve via nginx separately
     depends_on:
-      - frontend
       - backend
     networks:
       - app-network
-    profiles:
-      - nginx  # Only start with --profile nginx
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  mongodb_data:
-    driver: local
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  mongo_data:

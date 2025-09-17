@@ -1,35 +1,54 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+# server.py
 import os
-import logging
-from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List
 import uuid
+import logging
 from datetime import datetime
 
+from fastapi import FastAPI, APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from motor.motor_asyncio import AsyncIOMotorClient
+from typing import Optional
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+)
+logger = logging.getLogger("server")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app without a prefix
+# -----------------------------------------------------------------------------
+# App & Router
+# -----------------------------------------------------------------------------
 app = FastAPI(
     title="Adrian Pop Portfolio API",
     description="Professional consulting portfolio backend API",
-    version="1.0.0"
+    version="1.0.0",
 )
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Define Models
+# -----------------------------------------------------------------------------
+# Config
+# -----------------------------------------------------------------------------
+MONGO_URL = os.getenv(
+    "MONGO_URL",
+    # Fallback (adjust if you use auth in env instead)
+    "mongodb://mongodb:27017/adrian_pop_portfolio"
+)
+
+MONGO_DB_NAME = os.getenv("MONGO_DB", "adrian_pop_portfolio")
+
+# -----------------------------------------------------------------------------
+# Globals (initialized on startup)
+# -----------------------------------------------------------------------------
+mongo_client: Optional[AsyncIOMotorClient] = None
+db = None
+
+# -----------------------------------------------------------------------------
+# Models (example)
+# -----------------------------------------------------------------------------
 class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_name: str
@@ -38,6 +57,7 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+<<<<<<< HEAD
 # Root level routes (outside of /api prefix)
 @app.get("/")
 async def app_root():
@@ -114,13 +134,90 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+=======
+# -----------------------------------------------------------------------------
+# Lifecycle
+# -----------------------------------------------------------------------------
+>>>>>>> deb71a9 (Sync: server changes (compose, healthchecks, API tweaks))
 @app.on_event("startup")
-async def startup_db_client():
+async def on_startup():
+    global mongo_client, db
     logger.info("Starting up the application...")
-    logger.info(f"MongoDB URL: {mongo_url}")
-    logger.info(f"Database: {os.environ['DB_NAME']}")
+    logger.info(f"MongoDB URL: {MONGO_URL}")
+    logger.info(f"Database: {MONGO_DB_NAME}")
+
+    mongo_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000)
+    db = mongo_client[MONGO_DB_NAME]
+    logger.info("Application startup complete.")
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    logger.info("Shutting down the application...")
-    client.close()
+async def on_shutdown():
+    global mongo_client
+    if mongo_client:
+        mongo_client.close()
+        logger.info("Mongo client closed.")
+
+# -----------------------------------------------------------------------------
+# Liveness & Readiness
+# -----------------------------------------------------------------------------
+@app.get("/health")
+async def health():
+    """Liveness probe: does not touch external deps."""
+    return {
+        "status": "ok",
+        "service": "adrian-pop-portfolio",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe: verifies Mongo connectivity."""
+    try:
+        await db.command("ping")  # type: ignore
+        return {
+            "status": "ready",
+            "database": "connected",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not-ready",
+                "database": "disconnected",
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            },
+        )
+
+# -----------------------------------------------------------------------------
+# Root routes (no prefix)
+# -----------------------------------------------------------------------------
+@app.get("/")
+async def root():
+    return {
+        "message": "Adrian Pop Portfolio API",
+        "status": "running",
+        "version": "1.0.0",
+        "description": "Professional consulting portfolio backend",
+    }
+
+# -----------------------------------------------------------------------------
+# API routes (prefixed with /api)
+# -----------------------------------------------------------------------------
+@api_router.get("/")
+async def api_root():
+    return {"message": "API root", "version": "1.0.0"}
+
+@api_router.post("/status", response_model=StatusCheck)
+async def create_status(payload: StatusCheckCreate):
+    item = StatusCheck(client_name=payload.client_name)
+    # Example persistence (optional):
+    try:
+        await db.status_checks.insert_one(item.model_dump())  # type: ignore
+    except Exception as e:
+        logger.warning(f"Could not write status check: {e}")
+    return item
+
+app.include_router(api_router)
