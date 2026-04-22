@@ -7,7 +7,6 @@ import { Mail, Linkedin, Send, MessageCircle, Calendar, ArrowRight } from "lucid
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constants";
 
 interface ContactFormData {
   name: string;
@@ -52,22 +51,16 @@ const ContactSection = () => {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(
-        `${SUPABASE_URL}/functions/v1/sendContactEmail`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'apikey': SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            email: formData.email,
-            message: formData.message,
-            botField: '',
-          }),
-        });
+      const res = await fetch('/api/contact/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          message: formData.message,
+          botField: '',
+        }),
+      });
 
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${await res.text()}`);

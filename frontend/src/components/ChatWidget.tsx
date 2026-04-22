@@ -36,6 +36,12 @@ function extractText(body: unknown): string {
     if (typeof obj.text === "string") return obj.text;
     if (typeof obj.message === "string") return obj.message;
     if (typeof obj.response === "string") return obj.response;
+    // Gemini structured output: { content: { parts: [{ text: "..." }] } }
+    const content = obj.content as Record<string, unknown> | undefined;
+    if (content && Array.isArray(content.parts) && content.parts.length > 0) {
+      const part = content.parts[0] as Record<string, unknown>;
+      if (typeof part.text === "string") return part.text;
+    }
   }
   return "Sorry, I couldn't process that response.";
 }
@@ -91,6 +97,7 @@ const ChatWidget = () => {
           action: "sendMessage",
           sessionId: sessionId.current,
           chatInput: text,
+          message: text,
         }),
       });
 

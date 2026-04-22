@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constants";
 
 interface IntakeFormState {
   name: string;
@@ -58,13 +57,9 @@ const ContactBookPage = () => {
     ].join("\n");
 
     try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/sendContactEmail`, {
+      const response = await fetch("/api/contact/send-email", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-          "apikey": SUPABASE_ANON_KEY,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
           email: form.email,
