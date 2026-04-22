@@ -1,0 +1,24 @@
+Starting Medium RSS Integration Tests...
+Backend URL: http://localhost:8001
+API Base URL: http://localhost:8001/api
+============================================================
+[ERROR] Articles Latest Endpoint: Exception: All connection attempts failed
+[ERROR] Articles Health Endpoint: Exception: All connection attempts failed
+[ERROR] Articles Main Endpoint: Exception: All connection attempts failed
+[ERROR] Data Quality Validation: Exception: All connection attempts failed
+[ERROR] Error Handling: Exception: All connection attempts failed
+[ERROR] Performance Test: Exception: All connection attempts failed
+============================================================
+TEST SUMMARY:
+PASSED: 0
+FAILED: 6
+ERRORS: 0
+TOTAL: 6
+
+DETAILED RESULTS:
+⚠️ Articles Latest Endpoint: Exception: All connection attempts failed (N/A)
+⚠️ Articles Health Endpoint: Exception: All connection attempts failed (N/A)
+⚠️ Articles Main Endpoint: Exception: All connection attempts failed (N/A)
+⚠️ Data Quality Validation: Exception: All connection attempts failed (N/A)
+⚠️ Error Handling: Exception: All connection attempts failed (N/A)
+⚠️ Performance Test: Exception: All connection attempts failed (N/A)

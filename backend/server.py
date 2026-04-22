@@ -5,10 +5,13 @@ import logging
 from datetime import datetime
 
 from fastapi import FastAPI, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
+
+from routes.articles import router as articles_router
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -56,89 +59,9 @@ class StatusCheck(BaseModel):
 
 class StatusCheckCreate(BaseModel):
     client_name: str
-
-<<<<<<< HEAD
-# Root level routes (outside of /api prefix)
-@app.get("/")
-async def app_root():
-    return {
-        "message": "Adrian Pop Portfolio API", 
-        "status": "running", 
-        "version": "1.0.0",
-        "description": "Professional consulting portfolio backend"
-    }
-
-@app.get("/health")
-async def health_check():
-    try:
-        # Test database connection
-        await db.admin.command('ping')
-        db_status = "connected"
-    except Exception as e:
-        db_status = "disconnected"
-        logger.error(f"Database health check failed: {e}")
-    
-    return {
-        "status": "healthy",
-        "service": "adrian-pop-portfolio",
-        "timestamp": datetime.utcnow(),
-        "database": db_status
-    }
-
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def api_root():
-    return {"message": "Hello World", "api_version": "1.0"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    try:
-        status_dict = input.dict()
-        status_obj = StatusCheck(**status_dict)
-        _ = await db.status_checks.insert_one(status_obj.dict())
-        return status_obj
-    except Exception as e:
-        logger.error(f"Error creating status check: {e}")
-        raise
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    try:
-        status_checks = await db.status_checks.find().to_list(1000)
-        return [StatusCheck(**status_check) for status_check in status_checks]
-    except Exception as e:
-        logger.error(f"Error fetching status checks: {e}")
-        raise
-
-# Import and include the articles router
-from routes.articles import router as articles_router
-
-# Add articles router to the main api router
-api_router.include_router(articles_router)
-
-# Include the router in the main app
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-=======
 # -----------------------------------------------------------------------------
 # Lifecycle
 # -----------------------------------------------------------------------------
->>>>>>> deb71a9 (Sync: server changes (compose, healthchecks, API tweaks))
 @app.on_event("startup")
 async def on_startup():
     global mongo_client, db
@@ -219,5 +142,15 @@ async def create_status(payload: StatusCheckCreate):
     except Exception as e:
         logger.warning(f"Could not write status check: {e}")
     return item
+
+api_router.include_router(articles_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(api_router)

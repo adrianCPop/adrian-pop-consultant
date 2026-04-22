@@ -1,9 +1,12 @@
+last_runtime: codex
+last_updated: 2026-04-22T13:05:00Z
 plans:
   - id: portfolio-rebrand-ai
     title: "Portfolio Rebrand — AI Transformation Consultant"
-    status: active
+    status: complete
     created: 2026-04-22
     task_prefix: MRW
+    tracked_tokens: 534000
     tasks:
       - MRW-001
       - MRW-002
@@ -36,3 +39,5 @@ plans:
       - id: S6
         name: "Page composition"
         tasks: [MRW-012]
+    evals:
+      - EVAL-001

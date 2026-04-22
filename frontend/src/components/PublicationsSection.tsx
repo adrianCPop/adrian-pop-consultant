@@ -29,7 +29,7 @@ const PublicationsSection = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [articlesPerPage] = useState(3); // Show 3 articles per page
 
-  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'https://medynamic.preview.emergentagent.com';
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://medynamic.preview.emergentagent.com';
 
   const fetchArticles = async () => {
     try {

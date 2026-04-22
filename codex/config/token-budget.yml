@@ -1,0 +1,78 @@
+# mrw-sdlc Token Budget Configuration
+# ──────────────────────────────────────
+# Heuristic estimates for token consumption per agent invocation.
+# Used by the Planner (to estimate plan cost) and the Orchestrator
+# (to track consumption during execution).
+#
+# These are starting estimates. Calibrate over time by comparing
+# estimated vs actual (from Claude Code session stats) and updating
+# these values. Record calibration notes in mrW-AI/findings.md.
+#
+# Token counts are INPUT + OUTPUT combined per invocation.
+
+# ── Per-Agent Estimates ─────────────────
+agents:
+  codebase_analyst:
+    tokens: 10000
+    note: "Lightweight read-only scan, returns YAML summary"
+
+  planner:
+    tokens: 30000
+    note: "Reads spec + shared context, produces full task backlog"
+
+  builder:
+    by_size:
+      S:
+        tokens: 20000
+        note: "1-2h task: schema change, single endpoint, utility"
+      M:
+        tokens: 40000
+        note: "2-4h task: feature with 2-3 files + tests"
+    note: "Reads task + context, writes code + tests"
+
+  reviewer:
+    tokens: 15000
+    note: "Reads spec + task + code, runs tests, writes verdict"
+
+  eval:
+    tokens: 25000
+    note: "Reads spec + baseline + eval history, runs full check suite"
+
+# ── Orchestrator Overhead ───────────────
+orchestrator:
+  base_tokens: 5000
+  per_task_overhead: 2000
+  note: "Command prompt + per-task state tracking + Jira calls"
+
+# ── Retry Costs ─────────────────────────
+retry:
+  cost_per_retry: 35000
+  note: "Each retry = Builder re-run + Reviewer re-run"
+  breakdown:
+    builder_retry: 20000
+    reviewer_retry: 15000
+
+# ── Cost Calculation Formula ────────────
+# estimated_total =
+#   orchestrator.base_tokens
+#   + codebase_analyst.tokens
+#   + planner.tokens
+#   + SUM(for each task:
+#       builder[task.size].tokens
+#       + reviewer.tokens
+#       + orchestrator.per_task_overhead
+#     )
+#   + eval.tokens
+#
+# actual_tracked =
+#   Same formula but using actual invocation counts:
+#   + (retry_count × retry.cost_per_retry)
+#   - (skipped agents if --no-eval, etc.)
+
+# ── Pricing (optional, for cost estimates) ──
+# Set these to get dollar estimates alongside token counts.
+# Prices are per 1M tokens. Leave at 0 to disable cost display.
+pricing:
+  input_per_1m: 0     # e.g., 15.00 for Opus input
+  output_per_1m: 0    # e.g., 75.00 for Opus output
+  note: "Set to current Claude pricing for dollar estimates. Leave 0 for token-only display."

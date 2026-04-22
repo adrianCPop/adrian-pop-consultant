@@ -1,1 +1,8 @@
-evals: []
+evals:
+  - id: EVAL-001
+    plan_id: portfolio-rebrand-ai
+    date: 2026-04-22
+    verdict: SHIP
+    spec_coverage: 94
+    regression_count: 0
+    report: mrW-AI/evals/reports/EVAL-001.md
