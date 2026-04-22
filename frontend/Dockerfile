@@ -1,19 +1,19 @@
 # Multi-stage build for React + Vite
-FROM node:18-alpine as build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package manifest and lockfile for deterministic installs
+COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN yarn install --frozen-lockfile
+RUN npm ci
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN yarn build
+RUN npm run build
 
 # Production stage with Nginx
 FROM nginx:alpine
