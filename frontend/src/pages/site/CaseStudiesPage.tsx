@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,17 @@ const CaseStudiesPage = () => {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Outcome</p>
                   <p className="mt-2 text-sm text-muted-foreground">{caseStudy.outcome}</p>
+                  {caseStudy.href ? (
+                    <a
+                      href={caseStudy.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex items-center text-sm font-medium text-primary transition-colors hover:text-primary/85"
+                    >
+                      Open live product
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>

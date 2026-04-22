@@ -26,6 +26,7 @@ export interface CaseStudy {
   challenge: string;
   intervention: string;
   outcome: string;
+  href?: string;
 }
 
 export interface Insight {
@@ -177,13 +178,14 @@ export const caseStudies: CaseStudy[] = [
       "Company-wide AI platform enabling non-technical teams to leverage AI workflows independently.",
   },
   {
-    title: "HR Mobility Management System",
+    title: "COM-B Companion",
     challenge:
-      "15-step cross-border HR relocation process was handled manually with a high error rate.",
+      "Behaviour-change teams needed a practical system for managing projects and analyses across multiple behaviours or populations, without relying on static COM-B worksheets and fragmented expert judgment.",
     intervention:
-      "Built an end-to-end agentic automation pipeline replacing manual steps with n8n-orchestrated agents.",
+      "Built COM-B Companion with AI behaviour discovery, a guided or expert 5-step COM-B/BCW wizard, intervention and BCT mapping, progress tracking, and private or team workspaces. Stack: React 19, Supabase, and Google Gemini API.",
     outcome:
-      "Process time reduced from weeks to hours with a full audit trail for compliance.",
+      "Turned COM-B analysis into an operational product: teams can define target behaviours, diagnose barriers, generate strategic plans, and track adherence through daily check-ins, streaks, heatmaps, and trend views.",
+    href: "https://adrianpop.tech/comb-prod",
   },
   {
     title: "Financial Intelligence POC",
@@ -195,13 +197,13 @@ export const caseStudies: CaseStudy[] = [
       "Non-technical finance analysts queried structured data in natural language within six weeks.",
   },
   {
-    title: "mrw-sdlc Plugin",
+    title: "JIST SDLC Cross-Platform Plugin",
     challenge:
       "Teams adopting coding agents needed a repeatable delivery workflow instead of ad-hoc prompting, fragmented context, and inconsistent review quality.",
     intervention:
-      "Designed `mrw-sdlc` as an agentic SDLC plugin with shared project memory, task orchestration, review checkpoints, delivery evals, and runtime handoff rules for Codex and Claude workflows.",
+      "Designed JIST SDLC as a cross-platform plugin with shared project memory, task orchestration, review checkpoints, delivery evals, and runtime handoff rules for Codex, Claude, and Gemini workflows.",
     outcome:
-      "A structured plugin that turns feature delivery into a traceable pipeline: plan, build, review, eval, and documented handoff instead of isolated chat sessions.",
+      "A structured cross-platform delivery plugin that turns feature work into a traceable pipeline: plan, build, review, eval, and documented handoff instead of isolated chat sessions.",
   },
 ];
 

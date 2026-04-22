@@ -4,6 +4,7 @@ import {
   BookOpen,
   Brain,
   ChevronRight,
+  ExternalLink,
   Linkedin,
   Mail,
   ShieldCheck,
@@ -277,6 +278,17 @@ const HomePage = () => {
                   <span className="font-medium">Outcome:</span> {caseStudy.outcome}
                 </div>
               </div>
+              {caseStudy.href ? (
+                <a
+                  href={caseStudy.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center text-sm font-medium text-primary transition-colors hover:text-primary/85"
+                >
+                  Open live product
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              ) : null}
             </div>
           ))}
         </div>
