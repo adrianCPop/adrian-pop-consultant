@@ -36,6 +36,7 @@ services:
       MONGO_DB: ${DB_NAME}               # server.py expects MONGO_DB
       PYTHONUNBUFFERED: "1"
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      RESEND_API_KEY: ${RESEND_API_KEY}
     depends_on:
       mongodb:
         condition: service_healthy

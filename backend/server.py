@@ -12,6 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 
 from routes.articles import router as articles_router
+from routes.contact import router as contact_router
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -144,6 +145,7 @@ async def create_status(payload: StatusCheckCreate):
     return item
 
 api_router.include_router(articles_router)
+api_router.include_router(contact_router)
 
 app.add_middleware(
     CORSMiddleware,
