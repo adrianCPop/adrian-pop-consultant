@@ -12,6 +12,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Build-time env vars (VITE_* are inlined by Vite at build time)
+ARG VITE_N8N_CHAT_WEBHOOK_URL
+ENV VITE_N8N_CHAT_WEBHOOK_URL=$VITE_N8N_CHAT_WEBHOOK_URL
+
 # Build the application
 RUN npm run build
 
