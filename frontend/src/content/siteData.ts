@@ -188,13 +188,13 @@ export const caseStudies: CaseStudy[] = [
     href: "https://adrianpop.tech/comb-prod",
   },
   {
-    title: "Financial Intelligence POC",
+    title: "RLM Recursive Language Model",
     challenge:
-      "Finance team lacked real-time visibility into patterns across disparate data sources.",
+      "LLM workflows needed a retrieval layer that could go beyond one-shot context lookup and revisit deeper knowledge paths as the reasoning chain evolved.",
     intervention:
-      "Created an NL-to-SQL interface with a RAG pipeline over financial data, self-hosted on client infrastructure.",
+      "Designed RLM as a RAG-backed knowledge database that can be recursively called by the LLM, allowing the model to trigger follow-up retrieval passes as new sub-questions emerge during inference.",
     outcome:
-      "Non-technical finance analysts queried structured data in natural language within six weeks.",
+      "A more flexible retrieval architecture where the model can iteratively expand context, search across effectively billions of tokens of knowledge, refine answers, and work through multi-step reasoning without being limited to a single retrieval round.",
   },
   {
     title: "JIST SDLC Cross-Platform Plugin",
