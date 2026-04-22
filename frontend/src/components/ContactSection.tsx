@@ -7,7 +7,7 @@ import { Mail, Linkedin, Send, MessageCircle, Calendar, ArrowRight } from "lucid
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { SUPABASE_URL } from "@/integrations/supabase/constants";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/constants";
 
 interface ContactFormData {
   name: string;
@@ -56,7 +56,11 @@ const ContactSection = () => {
         `${SUPABASE_URL}/functions/v1/sendContactEmail`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY,
+          },
           body: JSON.stringify({
             name: formData.name,
             email: formData.email,

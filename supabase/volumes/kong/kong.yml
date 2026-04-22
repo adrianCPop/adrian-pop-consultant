@@ -1,0 +1,110 @@
+_format_version: "1.1"
+_transform: true
+
+###############################################################################
+# IMPORTANT: This file is processed by envsubst at startup.
+# Do not quote the ${VAR} placeholders — envsubst needs bare syntax.
+###############################################################################
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: ${ANON_KEY}
+  - username: service_role
+    keyauth_credentials:
+      - key: ${SERVICE_ROLE_KEY}
+
+services:
+  # ── Auth (public — no key required) ──────────────────────────────────────
+  - name: auth-v1
+    _comment: "GoTrue: /auth/v1/*"
+    url: http://supabase-auth:9999/v1
+    routes:
+      - name: auth-v1
+        strip_path: true
+        paths:
+          - /auth/v1
+    plugins:
+      - name: cors
+
+  # ── REST API (key required) ───────────────────────────────────────────────
+  - name: rest-v1
+    _comment: "PostgREST: /rest/v1/*"
+    url: http://supabase-rest:3000
+    routes:
+      - name: rest-v1
+        strip_path: true
+        paths:
+          - /rest/v1
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+          key_names:
+            - apikey
+
+  # ── Edge Functions ────────────────────────────────────────────────────────
+  - name: fn-send-contact-email
+    _comment: "Edge Function: sendContactEmail"
+    url: http://supabase-fn-contact-email:9001
+    routes:
+      - name: fn-send-contact-email
+        strip_path: true
+        paths:
+          - /functions/v1/sendContactEmail
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+          key_names:
+            - apikey
+
+  - name: fn-validate-rules
+    _comment: "Edge Function: validate-rules"
+    url: http://supabase-fn-validate-rules:9002
+    routes:
+      - name: fn-validate-rules
+        strip_path: true
+        paths:
+          - /functions/v1/validate-rules
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+          key_names:
+            - apikey
+
+  - name: fn-fiscal-alerts
+    _comment: "Edge Function: get-fiscal-alerts"
+    url: http://supabase-fn-fiscal-alerts:9003
+    routes:
+      - name: fn-fiscal-alerts
+        strip_path: true
+        paths:
+          - /functions/v1/get-fiscal-alerts
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+          key_names:
+            - apikey
+
+  # ── Postgres Meta (Studio backend) ────────────────────────────────────────
+  - name: meta-v1
+    _comment: "postgres-meta: /pg/*"
+    url: http://supabase-meta:8080
+    routes:
+      - name: meta-v1
+        strip_path: true
+        paths:
+          - /pg
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+          key_names:
+            - apikey

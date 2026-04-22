@@ -1,0 +1,221 @@
+# Self-hosted Supabase stack — run alongside the main docker-compose:
+#   docker compose -f docker-compose.yml -f docker-compose.supabase.yml up
+#
+# All env vars are defined in .env.supabase (copy from .env.supabase.example)
+
+services:
+  # ─── PostgreSQL (Supabase-flavoured) ───────────────────────────────────────
+  supabase-db:
+    image: supabase/postgres:15.1.0.147
+    container_name: supabase-db
+    restart: unless-stopped
+    ports:
+      - "54322:5432"   # host 54322 → container 5432 (avoids conflict with existing postgres on 5432)
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+      - ./supabase/volumes/db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - supabase-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─── API Gateway (Kong) ────────────────────────────────────────────────────
+  supabase-kong:
+    image: kong:2.8.1
+    container_name: supabase-kong
+    restart: unless-stopped
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000"
+      - "${KONG_HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ./supabase/volumes/kong:/home/kong:ro
+    entrypoint: >
+      bash -c "
+        export KONG_DECLARATIVE_CONFIG=/tmp/kong.yml &&
+        envsubst '$$ANON_KEY $$SERVICE_ROLE_KEY' < /home/kong/kong.yml > /tmp/kong.yml &&
+        /docker-entrypoint.sh kong docker-start
+      "
+    environment:
+      KONG_DATABASE: "off"
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: "64 160k"
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+      - supabase-net
+
+  # ─── Auth (GoTrue) ─────────────────────────────────────────────────────────
+  supabase-auth:
+    image: supabase/gotrue:v2.151.0
+    container_name: supabase-auth
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: "0.0.0.0"
+      PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: "*"
+      GOTRUE_DISABLE_SIGNUP: "${DISABLE_SIGNUP:-false}"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "false"
+      GOTRUE_SMTP_ADMIN_EMAIL: admin@example.com
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+      - supabase-net
+
+  # ─── REST API (PostgREST) ──────────────────────────────────────────────────
+  supabase-rest:
+    image: postgrest/postgrest:v12.2.0
+    container_name: supabase-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgresql://authenticator:${POSTGRES_PASSWORD}@supabase-db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+      - supabase-net
+
+  # ─── Edge Functions ────────────────────────────────────────────────────────
+  supabase-fn-contact-email:
+    image: supabase/edge-runtime:v1.67.4
+    container_name: supabase-fn-contact-email
+    restart: unless-stopped
+    volumes:
+      - ./frontend/supabase/functions/sendContactEmail:/home/deno/functions:ro
+    environment:
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      VERIFY_JWT: "${EDGE_VERIFY_JWT:-true}"
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions
+      - --port
+      - "9001"
+    networks:
+      - supabase-net
+
+  supabase-fn-validate-rules:
+    image: supabase/edge-runtime:v1.67.4
+    container_name: supabase-fn-validate-rules
+    restart: unless-stopped
+    volumes:
+      - ./frontend/supabase/functions/validate-rules:/home/deno/functions:ro
+    environment:
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      VERIFY_JWT: "${EDGE_VERIFY_JWT:-true}"
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions
+      - --port
+      - "9002"
+    networks:
+      - supabase-net
+
+  supabase-fn-fiscal-alerts:
+    image: supabase/edge-runtime:v1.67.4
+    container_name: supabase-fn-fiscal-alerts
+    restart: unless-stopped
+    volumes:
+      - ./frontend/supabase/functions/get-fiscal-alerts:/home/deno/functions:ro
+    environment:
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      VERIFY_JWT: "${EDGE_VERIFY_JWT:-true}"
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions
+      - --port
+      - "9003"
+    networks:
+      - supabase-net
+
+  # ─── Postgres Metadata (needed by Studio) ─────────────────────────────────
+  supabase-meta:
+    image: supabase/postgres-meta:v0.84.2
+    container_name: supabase-meta
+    restart: unless-stopped
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: supabase-db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+      - supabase-net
+
+  # ─── Studio (dashboard UI) ────────────────────────────────────────────────
+  supabase-studio:
+    image: supabase/studio:20241202-71e5240
+    container_name: supabase-studio
+    restart: unless-stopped
+    ports:
+      - "${STUDIO_PORT:-54323}:3000"
+    environment:
+      STUDIO_PG_META_URL: http://supabase-meta:8080
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      DEFAULT_ORGANIZATION_NAME: "Adrian Pop"
+      DEFAULT_PROJECT_NAME: "Portfolio"
+      LOGFLARE_LOGGER_BACKEND_API_KEY: your-logflare-key
+      LOGFLARE_API_URL: http://supabase-analytics:4000
+      NEXT_PUBLIC_ENABLE_LOGS: "false"
+    depends_on:
+      supabase-meta:
+        condition: service_started
+    networks:
+      - supabase-net
+
+networks:
+  supabase-net:
+    driver: bridge
+
+volumes:
+  supabase_db_data:

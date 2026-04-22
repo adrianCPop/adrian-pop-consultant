@@ -13,12 +13,14 @@ import ExperienceCVPage from "@/pages/site/ExperienceCVPage";
 import AIAdvisorPage from "@/pages/site/AIAdvisorPage";
 import ContactBookPage from "@/pages/site/ContactBookPage";
 import NotFound from "@/pages/NotFound";
+import ChatWidget from "@/components/ChatWidget";
 
 const App = () => {
   return (
     <>
       <Toaster />
       <Sonner />
+      <ChatWidget />
       <BrowserRouter>
         <Routes>
           <Route element={<SiteLayout />}>
