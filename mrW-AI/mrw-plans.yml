@@ -1,0 +1,38 @@
+plans:
+  - id: portfolio-rebrand-ai
+    title: "Portfolio Rebrand — AI Transformation Consultant"
+    status: active
+    created: 2026-04-22
+    task_prefix: MRW
+    tasks:
+      - MRW-001
+      - MRW-002
+      - MRW-003
+      - MRW-004
+      - MRW-005
+      - MRW-006
+      - MRW-007
+      - MRW-008
+      - MRW-009
+      - MRW-010
+      - MRW-011
+      - MRW-012
+    session_groups:
+      - id: S1
+        name: "Pre-flight & SEO"
+        tasks: [MRW-001, MRW-002]
+      - id: S2
+        name: "Hero rebrand"
+        tasks: [MRW-003, MRW-004]
+      - id: S3
+        name: "Services rebrand"
+        tasks: [MRW-005]
+      - id: S4
+        name: "New sections"
+        tasks: [MRW-006, MRW-007, MRW-008]
+      - id: S5
+        name: "Publications, Contact, Footer, Nav"
+        tasks: [MRW-009, MRW-010, MRW-011]
+      - id: S6
+        name: "Page composition"
+        tasks: [MRW-012]

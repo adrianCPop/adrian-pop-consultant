@@ -1,0 +1,16 @@
+{
+  "_readme": "Copy to .mcp.json and fill in real values. Never commit .mcp.json.",
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<your-github-pat>"
+      }
+    },
+    "atlassian": {
+      "type": "sse",
+      "url": "https://mcp.atlassian.com/v1/mcp"
+    }
+  }
+}

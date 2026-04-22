@@ -1,0 +1,135 @@
+plan_id: portfolio-rebrand-ai
+spec_title: "Portfolio Rebrand — AI Transformation Consultant"
+created: 2026-04-22
+
+functional:
+  - id: F1
+    description: "Page title contains 'AI Transformation Consultant'"
+    verify: test
+    pattern: "AI Transformation Consultant"
+    file: frontend/index.html
+
+  - id: F2
+    description: "Meta description leads with AI adoption, not iOS"
+    verify: test
+    pattern: "AI"
+    file: frontend/index.html
+    negative_pattern: "iOS development"
+
+  - id: F3
+    description: "Hero badge no longer reads 'Tech Startup Portfolio'"
+    verify: test
+    pattern: "AI Transformation Consultant"
+    file: frontend/src/components/HeroSection.tsx
+    negative_pattern: "Tech Startup Portfolio"
+
+  - id: F4
+    description: "ServicesSection contains all 4 new service blocks"
+    verify: test
+    pattern: "AI Adoption|n8n|AI Governance|Engineering Leadership"
+    file: frontend/src/components/ServicesSection.tsx
+
+  - id: F5
+    description: "ServicesSection does not lead with iOS or mobile"
+    verify: test
+    negative_pattern: "Mobile & Embedded|iOS"
+    file: frontend/src/components/ServicesSection.tsx
+
+  - id: F6
+    description: "CaseStudiesSection component exists with 4 case studies"
+    verify: test
+    pattern: "CorporateAI|HR Mobility|Financial Intelligence|EU AI Act"
+    file: frontend/src/components/CaseStudiesSection.tsx
+
+  - id: F7
+    description: "InvoiceLawSection repurposed as AI Automation Assistant"
+    verify: test
+    pattern: "AI Automation Assistant"
+    file: frontend/src/components/InvoiceLawSection.tsx
+
+  - id: F8
+    description: "EarlyCareerSection component exists"
+    verify: test
+    pattern: "Engineering Foundation|Earlier Career|embedded|iOS"
+    file: frontend/src/components/EarlyCareerSection.tsx
+
+  - id: F9
+    description: "PublicationsSection uses Vite env var (not CRA)"
+    verify: test
+    pattern: "import\\.meta\\.env\\.VITE_BACKEND_URL"
+    file: frontend/src/components/PublicationsSection.tsx
+    negative_pattern: "process\\.env\\.REACT_APP"
+
+  - id: F10
+    description: "Footer contains Medium link"
+    verify: test
+    pattern: "medium\\.com/@adrian\\.c\\.pop"
+    file: frontend/src/components/Footer.tsx
+
+  - id: F11
+    description: "Footer LinkedIn URL is correct"
+    verify: test
+    pattern: "linkedin\\.com/in/adrian-c-pop"
+    file: frontend/src/components/Footer.tsx
+
+  - id: F12
+    description: "Index.tsx imports and renders CaseStudiesSection"
+    verify: test
+    pattern: "CaseStudiesSection"
+    file: frontend/src/pages/Index.tsx
+
+  - id: F13
+    description: "Index.tsx imports and renders EarlyCareerSection"
+    verify: test
+    pattern: "EarlyCareerSection"
+    file: frontend/src/pages/Index.tsx
+
+  - id: F14
+    description: "server.py has no git conflict markers"
+    verify: test
+    negative_pattern: "<<<<<<<|=======|>>>>>>>"
+    file: backend/server.py
+
+regression:
+  - id: R1
+    description: "No regressions in existing components not modified by this plan"
+    verify: baseline_diff
+
+quality:
+  - id: Q1
+    description: "TypeScript compiles without errors"
+    verify: command
+    command: "cd frontend && npx tsc --noEmit"
+
+  - id: Q2
+    description: "ESLint passes"
+    verify: command
+    command: "cd frontend && bun run lint"
+
+security:
+  - id: SEC1
+    description: "No hardcoded secrets or API keys added"
+    verify: command
+    command: "grep -rn 'password\\|secret\\|api_key\\|apiKey' frontend/src/components/CaseStudiesSection.tsx frontend/src/components/EarlyCareerSection.tsx 2>/dev/null | grep -v node_modules || true"
+
+  - id: SEC2
+    description: "No .env files committed"
+    verify: command
+    command: "git ls-files | grep -E '^\\.env$' || true"
+
+manual:
+  - id: M1
+    description: "Visual inspection: hero section looks professional with new AI framing"
+    verify: manual
+
+  - id: M2
+    description: "Visual inspection: case study cards render correctly on mobile and desktop"
+    verify: manual
+
+  - id: M3
+    description: "Visual inspection: page narrative flows logically Hero→Services→Work→Testimonials→AI Demo→Publications→Background→Contact"
+    verify: manual
+
+  - id: M4
+    description: "All external links (LinkedIn, Medium, email) open correctly"
+    verify: manual

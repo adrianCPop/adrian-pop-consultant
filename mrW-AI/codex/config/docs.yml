@@ -1,0 +1,29 @@
+# mrw-sdlc Documentation Generation Settings
+# ─────────────────────────────────────────────
+# Controls when and how mrw-sdlc writes documentation after task and plan completion.
+# Both /mrw:build and /mrw:run read this file to decide whether to generate docs.
+
+docs:
+  enabled: true
+
+  # ── Docs after individual task completion (/mrw:build) ──────────────────────
+  # Lightweight: changelog entry + inline API doc updates only.
+  # Skipped for S-sized tasks unless min_size is set to "S".
+  on_task:
+    enabled: true
+    min_size: M             # "S" = always generate | "M" = only for M-sized tasks
+    update_changelog: true  # Append entry to CHANGELOG.md (create if absent)
+    update_api_docs: true   # Update docstrings/comments if public API files changed
+
+  # ── Docs after full plan delivery (/mrw:run, after eval) ────────────────────
+  # Comprehensive: feature doc, README section, and CHANGELOG rollup.
+  on_plan:
+    enabled: true
+    output_dir: "docs/"                 # Where to write feature docs
+    generate_feature_docs: true         # Write docs/[feature-slug].md
+    update_readme: true                 # Add/update feature section in README.md
+    update_changelog: true             # Append all completed tasks to CHANGELOG.md
+
+  # ── Output format ───────────────────────────────────────────────────────────
+  changelog_format: "keepachangelog"    # "keepachangelog" | "simple"
+  changelog_file: "CHANGELOG.md"        # Relative to project root
