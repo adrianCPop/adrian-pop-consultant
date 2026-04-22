@@ -1,103 +1,104 @@
-import { FormEvent, useMemo, useState } from "react";
-import { BrainCircuit, Lock, Send } from "lucide-react";
+import { FormEvent, useRef, useMemo, useState, useCallback } from "react";
+import { BrainCircuit, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { aiAdvisorPrompts } from "@/content/siteData";
+
+const N8N_WEBHOOK_URL = import.meta.env.VITE_N8N_CHAT_WEBHOOK_URL as string | undefined;
 
 type Message = {
   role: "user" | "assistant";
   text: string;
 };
 
-const PREVIEW_LIMIT = 2;
+function generateSessionId() {
+  return `advisor-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
 
-const buildAdvisorAnswer = (question: string) => {
-  const lower = question.toLowerCase();
-
-  const opening =
-    "Strategic assessment: treat this as an operating model decision, not only a tooling choice.";
-
-  const governance =
-    "Define explicit decision rights for leadership, engineering managers, and technical reviewers before rollout.";
-
-  const metrics =
-    "Track adoption quality with a minimal KPI set: cycle reliability, review quality, escaped defects, and team-level confidence.";
-
-  const compliance =
-    "When compliance is relevant, move constraints into architecture decisions early and formalize release risk controls.";
-
-  if (lower.includes("manager") || lower.includes("govern")) {
-    return `${opening} ${governance} ${metrics}`;
+function extractText(body: unknown): string {
+  if (typeof body === "string") return body;
+  if (body && typeof body === "object") {
+    const obj = body as Record<string, unknown>;
+    if (typeof obj.output === "string") return obj.output;
+    if (typeof obj.text === "string") return obj.text;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.response === "string") return obj.response;
+    const content = obj.content as Record<string, unknown> | undefined;
+    if (content && Array.isArray(content.parts) && content.parts.length > 0) {
+      const part = content.parts[0] as Record<string, unknown>;
+      if (typeof part.text === "string") return part.text;
+    }
   }
-
-  if (lower.includes("architecture") || lower.includes("scale")) {
-    return `${opening} Prioritize architecture constraints and sequencing first. ${compliance} ${metrics}`;
+  if (Array.isArray(body) && body.length > 0) {
+    const first = body[0];
+    if (typeof first === "string") return first;
+    if (first && typeof first === "object") {
+      const obj = first as Record<string, unknown>;
+      if (typeof obj.output === "string") return obj.output;
+      if (typeof obj.text === "string") return obj.text;
+    }
   }
-
-  if (lower.includes("compliance") || lower.includes("einvoicing") || lower.includes("regulat")) {
-    return `${opening} ${compliance} Build country or regulation-specific constraints into delivery planning, not post-hoc validation.`;
-  }
-
-  return `${opening} ${governance} ${metrics}`;
-};
+  return "Sorry, I couldn't process that response.";
+}
 
 const AIAdvisorPage = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [email, setEmail] = useState("");
-  const [organization, setOrganization] = useState("");
-  const [context, setContext] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const sessionId = useRef(generateSessionId());
 
-  const assistantResponses = useMemo(
-    () => messages.filter((message) => message.role === "assistant").length,
+  const assistantCount = useMemo(
+    () => messages.filter((m) => m.role === "assistant").length,
     [messages]
   );
 
-  const previewLocked = !unlocked && assistantResponses >= PREVIEW_LIMIT;
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isTyping) return;
+
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", text: text.trim() }]);
+    setIsTyping(true);
+
+    if (!N8N_WEBHOOK_URL) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "Chat is not configured. Please set VITE_N8N_CHAT_WEBHOOK_URL." },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(N8N_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sendMessage",
+          sessionId: sessionId.current,
+          chatInput: text.trim(),
+          message: text.trim(),
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data: unknown = await res.json();
+      setMessages((prev) => [...prev, { role: "assistant", text: extractText(data) }]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "Sorry, I had trouble connecting. Please try again." },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  }, [isTyping]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-
-    if (!input.trim()) {
-      return;
-    }
-
-    const nextMessages: Message[] = [...messages, { role: "user", text: input.trim() }];
-
-    if (previewLocked) {
-      nextMessages.push({
-        role: "assistant",
-        text: "Preview limit reached. Unlock deep-dive mode to receive tailored diagnostic guidance based on your organization context.",
-      });
-      setMessages(nextMessages);
-      setInput("");
-      return;
-    }
-
-    nextMessages.push({ role: "assistant", text: buildAdvisorAnswer(input) });
-    setMessages(nextMessages);
-    setInput("");
-  };
-
-  const unlockAdvisor = (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!email.trim() || !organization.trim() || !context.trim()) {
-      return;
-    }
-
-    setUnlocked(true);
-    setMessages((current) => [
-      ...current,
-      {
-        role: "assistant",
-        text: "Deep-dive mode unlocked. I will now tailor responses using your organization context. Next step after this chat: book a strategic triage session for a scoped engagement proposal.",
-      },
-    ]);
+    sendMessage(input);
   };
 
   return (
@@ -108,8 +109,7 @@ const AIAdvisorPage = () => {
         </Badge>
         <h1 className="mt-4 font-heading text-3xl font-semibold sm:text-4xl">AI Automation Assistant</h1>
         <p className="mt-4 max-w-3xl text-base text-muted-foreground">
-          Ask me about AI adoption, automation architecture, or n8n workflows. Preview is open and
-          deep-dive mode stays available for tailored follow-up.
+          Ask me about AI adoption, automation architecture, or n8n workflows. Powered by Adi's personal AI assistant.
         </p>
       </section>
 
@@ -119,7 +119,7 @@ const AIAdvisorPage = () => {
             <CardTitle className="font-heading text-2xl">Advisor Conversation</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 h-[360px] space-y-3 overflow-y-auto rounded-xl border border-border/70 bg-background/70 p-4">
+            <div className="mb-4 h-[400px] space-y-3 overflow-y-auto rounded-xl border border-border/70 bg-background/70 p-4">
               {messages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
                   <BrainCircuit className="mb-3 h-8 w-8 text-primary" />
@@ -139,6 +139,13 @@ const AIAdvisorPage = () => {
                   </div>
                 ))
               )}
+              {isTyping && (
+                <div className="flex gap-1 rounded-xl bg-card px-3 py-3 w-fit">
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="flex gap-3">
@@ -147,82 +154,39 @@ const AIAdvisorPage = () => {
                 onChange={(event) => setInput(event.target.value)}
                 placeholder="Ask about AI adoption, n8n automation, or EU AI Act..."
                 className="bg-background/80"
+                disabled={isTyping}
               />
-              <Button type="submit" className="rounded-full px-5">
+              <Button type="submit" disabled={!input.trim() || isTyping} className="rounded-full px-5">
                 <Send className="h-4 w-4" />
               </Button>
             </form>
 
-            {previewLocked ? (
-              <p className="mt-3 text-xs text-amber-700">
-                Preview limit reached. Unlock deep-dive mode to continue with tailored guidance.
-              </p>
-            ) : (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Preview mode: {PREVIEW_LIMIT - assistantResponses} structured responses remaining.
-              </p>
-            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              {assistantCount > 0
+                ? `${assistantCount} response${assistantCount > 1 ? "s" : ""} in this session`
+                : "Ask anything about AI adoption, automation, or Adi's services."}
+            </p>
           </CardContent>
         </Card>
 
-        <div className="space-y-6">
-          <Card className="border-border/80 bg-card/90">
-            <CardHeader>
-              <CardTitle className="font-heading text-xl">Starter Prompts</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {aiAdvisorPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => setInput(prompt)}
-                  className="w-full rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/80 bg-card/90">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-heading text-xl">
-                <Lock className="h-4 w-4" />
-                Unlock Deep-Dive Mode
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={unlockAdvisor} className="space-y-3">
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Work email"
-                  required
-                />
-                <Input
-                  value={organization}
-                  onChange={(event) => setOrganization(event.target.value)}
-                  placeholder="Organization"
-                  required
-                />
-                <Textarea
-                  value={context}
-                  onChange={(event) => setContext(event.target.value)}
-                  placeholder="Current transformation challenge"
-                  rows={4}
-                  required
-                />
-                <Button type="submit" className="w-full rounded-full">
-                  Unlock and Continue
-                </Button>
-              </form>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Deep-dive mode is designed to qualify fit and route toward a paid working session.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border-border/80 bg-card/90">
+          <CardHeader>
+            <CardTitle className="font-heading text-xl">Starter Prompts</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {aiAdvisorPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => sendMessage(prompt)}
+                disabled={isTyping}
+                className="w-full rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:opacity-50"
+              >
+                {prompt}
+              </button>
+            ))}
+          </CardContent>
+        </Card>
       </section>
     </div>
   );
