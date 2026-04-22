@@ -1,0 +1,90 @@
+# .eval.yml — Success Criteria for Eval Agent
+# ─────────────────────────────────────────────
+# Place this file next to your spec (e.g., specs/auth.eval.yml for specs/auth.md)
+# or at project root as .eval.yml for a project-wide default.
+#
+# The Eval agent reads this to know HOW to verify each requirement.
+# Without this file, it falls back to regression + spec compliance checks only.
+
+spec: path/to/spec.md    # Path to the spec this eval validates against
+version: 1               # Schema version
+
+success_criteria:
+
+  # ── Functional Requirements ─────────────
+  # Verify that features described in the spec actually work.
+  functional:
+    - id: F1
+      description: "Describe the requirement from the spec"
+      verify: test                    # Look for a matching test
+      pattern: "test.*name.*pattern"  # Regex to match test names
+
+    - id: F2
+      description: "Another requirement"
+      verify: command                 # Run a command to verify
+      command: "npm run test -- --grep 'specific test'"
+      expect: exit_0                  # exit_0 | no_output | contains: "text"
+
+    # - id: F3
+    #   description: "Requirement needing human verification"
+    #   verify: manual
+    #   note: "Check the UI renders correctly on mobile"
+
+  # ── Regression ──────────────────────────
+  # Ensure nothing that worked before is now broken.
+  regression:
+    - id: R1
+      description: "All pre-existing tests still pass"
+      verify: baseline_diff           # Compare current test run against baseline
+
+  # ── Code Quality ────────────────────────
+  # Static analysis, linting, type checking.
+  quality:
+    - id: Q1
+      description: "No type errors"
+      verify: command
+      command: "npx tsc --noEmit"     # Adapt to your stack
+      expect: exit_0
+
+    - id: Q2
+      description: "No lint violations"
+      verify: command
+      command: "npm run lint"          # Adapt to your stack
+      expect: exit_0
+
+    # - id: Q3
+    #   description: "Test coverage above threshold on new files"
+    #   verify: coverage
+    #   threshold: 80                  # Percentage
+
+  # ── Security ────────────────────────────
+  # Basic security checks. For deep audits, use /mrw:security.
+  security:
+    - id: S1
+      description: "No hardcoded secrets in source"
+      verify: command
+      command: "grep -rn 'password\\s*=\\s*[\"'\\''\"'\\''']\\|api_key\\s*=\\s*[\"'\\''\"'\\''']\\|secret\\s*=\\s*[\"'\\''\"'\\''']' src/ --include='*.ts' --include='*.js' --include='*.py' -l"
+      expect: no_output
+
+    # - id: S2
+    #   description: "No .env files committed"
+    #   verify: command
+    #   command: "git ls-files '*.env' '.env*'"
+    #   expect: no_output
+
+  # ── Performance ─────────────────────────
+  # Performance checks — often manual or require load testing.
+  # performance:
+  #   - id: P1
+  #     description: "API response times under 200ms"
+  #     verify: manual
+  #     note: "Requires load testing setup — flag for PM review in Jira"
+
+  # ── Integration ─────────────────────────
+  # End-to-end checks that verify components work together.
+  # integration:
+  #   - id: I1
+  #     description: "Full user flow works end-to-end"
+  #     verify: command
+  #     command: "npm run test:e2e"
+  #     expect: exit_0

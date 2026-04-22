@@ -1,0 +1,114 @@
+# mrw-sdlc Jira Integration Configuration
+# ─────────────────────────────────────────
+# This file configures how mrw-sdlc syncs tasks and evals to Jira.
+# The orchestrator (run.md) and standalone commands read this to create/update Jira issues.
+#
+# Prerequisites:
+#   1. Install mcp-atlassian: add to .claude/settings.json:
+#      {
+#        "mcpServers": {
+#          "mcp-atlassian": {
+#            "command": "uvx",
+#            "args": ["mcp-atlassian"],
+#            "env": {
+#              "JIRA_URL": "https://yourteam.atlassian.net",
+#              "JIRA_USERNAME": "your.email@company.com",
+#              "JIRA_API_TOKEN": "${JIRA_API_TOKEN}"
+#            }
+#          }
+#        }
+#      }
+#   2. Set JIRA_API_TOKEN in your environment
+#   3. Fill in the values below
+
+# ── Connection ──────────────────────────
+jira:
+  enabled: false  # Set to true when mcp-atlassian is configured
+  project_key: ""  # e.g., "PROJ", "AUTH", "MYAPP"
+
+# ── Issue Type Mapping ──────────────────
+  issue_types:
+    epic: "Epic"           # Plan → Epic
+    story: "Story"         # Task → Story
+    eval: "Task"           # Eval report → Task with label
+    bug: "Bug"             # /mrw-bug → Bug issue (fallback to "Task" if Bug type unavailable)
+    security: "Task"       # /mrw-security → Task with security-audit label
+
+# ── Labels ──────────────────────────────
+  labels:
+    eval: "mrw-eval"         # Applied to eval report issues
+    automated: "mrw-sdlc"    # Applied to all mrw-sdlc created issues
+    blocked: "blocked"       # Applied when task is blocked after retries
+    security: "security-audit"  # Applied to security audit issues
+
+# ── Status Mapping ──────────────────────
+# Map mrw-sdlc states to your Jira workflow transitions.
+# Use the TRANSITION NAME (not status name) from your Jira workflow.
+  transitions:
+    todo: "To Do"
+    in_progress: "In Progress"
+    done: "Done"
+    blocked: "Blocked"      # Optional — remove if your workflow doesn't have this
+
+# ── Field Mapping (optional) ────────────
+# Map to custom fields if you have them. Leave empty to use description/labels only.
+  custom_fields:
+    verdict: ""             # e.g., "customfield_10050" for SHIP/NEEDS_WORK/BLOCKED
+    spec_coverage: ""       # e.g., "customfield_10051" for percentage
+
+# ── Sync Behavior — per command ─────────
+# Set any flag to false to skip that specific Jira action.
+# All flags default to true — this is an opt-out model.
+# Each command reads only its own sync.[command].* section.
+  sync:
+
+    # /mrw-plan: create the epic and per-task stories after plan approval
+    # On re-plan (spec already has a jira_epic_key), update existing issues instead of creating duplicates.
+    plan:
+      create_epic: true           # Create Epic when plan is approved (first run)
+      create_stories: true        # Create Story for each NEW task in the backlog
+      update_epic: true           # Update existing Epic description on re-plan
+      update_stories: true        # Update existing Story summary/description on re-plan
+
+    # /mrw-run: orchestrator-managed full lifecycle (plan → build → review → eval)
+    run:
+      create_epic: true             # Create Epic after plan approval
+      create_stories: true          # Create Story for each task
+      transition_in_progress: true  # Move story to In Progress when Builder starts
+      transition_done: true         # Move story to Done on PASS
+      comment_on_pass: true         # Add full PASS comment on Done transition
+      comment_on_partial: true      # Add full PARTIAL comment with findings
+      comment_on_fail: true         # Add full FAIL comment with retry count
+      transition_blocked: true      # Move story to Blocked after 3 retries
+      comment_on_blocked: true      # Add full blocker summary comment
+      create_eval_issue: true       # Create Task for eval report after all tasks complete
+      comment_eval_on_epic: true    # Comment eval summary on Epic if NEEDS_WORK/BLOCKED
+
+    # /mrw-build (standalone): transition the task story when build starts
+    build:
+      transition_in_progress: true  # Move story to In Progress when build starts
+      comment_task_details: true    # Add full task description (objective + criteria + files) as comment
+
+    # /mrw-review (standalone): post verdict and full review content to Jira
+    review:
+      transition_done: true         # Move story to Done on PASS
+      comment_on_pass: true         # Add full review content as comment on PASS
+      comment_on_partial: true      # Add full review content as comment on PARTIAL (no transition)
+      comment_on_fail: true         # Add full review content as comment on FAIL (no transition)
+
+    # /mrw-eval (standalone): create eval issue linked to epic
+    eval:
+      create_eval_issue: true       # Create Task for the eval report
+      link_eval_to_epic: true       # Link eval issue to the Epic
+      comment_eval_on_epic: true    # Comment on Epic if verdict is NEEDS_WORK/BLOCKED
+
+    # /mrw-bug: track bug lifecycle — create on investigation, resolve on fix
+    bug:
+      create_issue: true            # Create Bug issue when investigation starts (Phase 1.5)
+      transition_done: true         # Move to Done when fix is verified (Phase 8.5)
+      comment_resolution: true      # Add full root cause + fix + blast radius comment on resolve
+
+    # /mrw-security: create security audit issue with full report content
+    security:
+      create_issue: true            # Create Task with full audit report as description
+      link_to_epic: true            # Link to Epic if a known epic key is found

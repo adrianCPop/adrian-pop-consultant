@@ -1,0 +1,69 @@
+{
+  "name": "mrw-sdlc",
+  "runtime": "codex",
+  "version": "6.0.0",
+  "description": "Agentic SDLC framework for Codex using shared mrW-AI state and root-level docs outputs.",
+  "commands_dir": "codex/commands",
+  "agents_dir": "codex/agents",
+  "orchestration_dir": "codex/orchestration",
+  "config_dir": "codex/config",
+  "templates_dir": "codex/templates",
+  "shared_state_dir": "mrW-AI",
+  "docs_dir": "docs",
+  "models": {
+    "orchestrator": {
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    },
+    "codebase-analyst": {
+      "agent_type": "explorer",
+      "model": "gpt-5.4-mini",
+      "reasoning_effort": "medium"
+    },
+    "planner": {
+      "agent_type": "worker",
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    },
+    "builder": {
+      "agent_type": "worker",
+      "model": "gpt-5.3-codex",
+      "reasoning_effort": "medium"
+    },
+    "reviewer": {
+      "agent_type": "worker",
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    },
+    "repo-analyst": {
+      "agent_type": "worker",
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    },
+    "security-auditor": {
+      "agent_type": "worker",
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    },
+    "devops-engineer": {
+      "agent_type": "worker",
+      "model": "gpt-5.3-codex",
+      "reasoning_effort": "medium"
+    },
+    "eval": {
+      "agent_type": "worker",
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    },
+    "conflict-resolver": {
+      "agent_type": "worker",
+      "model": "gpt-5.4",
+      "reasoning_effort": "high"
+    }
+  },
+  "compatibility": {
+    "shared_versioning": true,
+    "claude_plugin_version_source": "plugins/mrw-sdlc/.claude-plugin/plugin.json",
+    "claude_marketplace_version_source": ".claude-plugin/marketplace.json"
+  }
+}
