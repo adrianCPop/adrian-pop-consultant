@@ -31,6 +31,13 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
+.env
+.env.*
+!.env.example
+!.env.supabase.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
 *token.json*
 *credentials.json*
@@ -41,6 +48,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dump.rdb
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # System files
 .DS_Store
