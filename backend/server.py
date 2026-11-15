@@ -13,6 +13,7 @@ from typing import Optional
 
 from routes.articles import router as articles_router
 from routes.contact import router as contact_router
+from routes.voyage import router as voyage_router
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -146,6 +147,7 @@ async def create_status(payload: StatusCheckCreate):
 
 api_router.include_router(articles_router)
 api_router.include_router(contact_router)
+api_router.include_router(voyage_router)
 
 app.add_middleware(
     CORSMiddleware,

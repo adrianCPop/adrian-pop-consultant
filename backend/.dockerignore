@@ -1,0 +1,5 @@
+# Local development and test tooling stays out of the image
+dev_server.py
+requirements-dev.txt
+__pycache__/
+*.pyc

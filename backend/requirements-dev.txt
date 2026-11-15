@@ -1,0 +1,3 @@
+-r requirements.txt
+# Tests (tests/test_voyage_api.py) and the local dev server (dev_server.py)
+mongomock-motor>=0.0.36

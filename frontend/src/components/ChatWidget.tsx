@@ -134,7 +134,7 @@ const ChatWidget = () => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div data-site-chat className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {/* Chat panel */}
       {isOpen && (
         <div className="w-[340px] sm:w-[380px] rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-2xl flex flex-col overflow-hidden"
