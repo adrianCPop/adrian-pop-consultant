@@ -96,6 +96,8 @@
 .voyage-boat__pulse {
   position: absolute;
   inset: 6px;
+  /* Decoration only. As it grows it must not take clicks meant for a pin beside the boat. */
+  pointer-events: none;
   border-radius: 9999px;
   background: hsl(184 100% 43% / 0.5);
   animation: voyage-pulse 2.4s ease-out infinite;
@@ -173,4 +175,23 @@
   line-height: 14px;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* Hours ahead, along the projected course */
+.leaflet-tooltip.voyage-ahead-label {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  color: hsl(38 95% 72%);
+  font-family: "Sora", "Segoe UI", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px hsl(228 39% 6%), 0 0 2px hsl(228 39% 6%);
+}
+
+.leaflet-tooltip.voyage-ahead-label::before {
+  display: none;
 }

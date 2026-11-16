@@ -29,6 +29,7 @@ import {
   type VoyagePhotoRef,
   type VoyagePort,
 } from "@/lib/voyageApi";
+import { MIN_SPEED_KN, compareWithPlan, projectCourse, steadyCourse } from "@/lib/voyageCourse";
 import { computeStats, toFixes } from "@/lib/voyageStats";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,13 @@ const DAY_MS = 86_400_000;
 const QUIET_MS = 24 * 3_600_000;
 /** Within this distance of the boat, the newest entry opens from the boat marker instead of its own pin. */
 const NEAR_BOAT_NM = 60;
+/** How far ahead the present course is drawn on the map. */
+const AHEAD_HOURS = [24, 48];
+/** A course taken from a position older than this says little about where the boat is heading now. */
+const AHEAD_MAX_AGE_MS = 12 * 3_600_000;
+/** Closer to the plan than this counts as being on it: the figures are not finer than that. */
+const ON_COURSE_DEG = 3;
+const ON_ROUTE_NM = 2;
 
 const formatUtc = (time: number | string, options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", ...options }).format(new Date(time));
@@ -196,10 +204,6 @@ const VoyagePage = () => {
     [entries]
   );
   const latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
-  const boatEntryId =
-    stats && latestEntry?.pos && distanceNm(latestEntry.pos, stats.position) < NEAR_BOAT_NM
-      ? latestEntry.id
-      : undefined;
 
   /**
    * Entries written in port have no position: nothing is published about where
@@ -233,6 +237,22 @@ const VoyagePage = () => {
     return { port, pinned: new Set(newest.values()) };
   }, [entries, voyage, departure, arrival]);
 
+  // The newest entry opens from the boat itself when it was written where the boat
+  // is, or in the port the boat is lying in: a pin of its own would sit under the boat.
+  const latestPort =
+    latestEntry && ashore.pinned.has(latestEntry.id) ? ashore.port.get(latestEntry.id) : undefined;
+  const latestPlace: LatLon | null =
+    latestEntry?.pos ?? (latestPort ? [latestPort.lat, latestPort.lon] : null);
+  const boatEntryId =
+    stats && latestEntry && latestPlace && distanceNm(latestPlace, stats.position) < NEAR_BOAT_NM
+      ? latestEntry.id
+      : undefined;
+
+  const sameOriginAndDestination =
+    voyage !== null &&
+    voyage.origin.lat === voyage.destination.lat &&
+    voyage.origin.lon === voyage.destination.lon;
+
   const pins = useMemo<VoyageMapPin[]>(
     () =>
       entries.flatMap((entry) => {
@@ -247,12 +267,48 @@ const VoyagePage = () => {
                 title: entry.title || "Log entry",
                 pos,
                 // Just below the port's own dot, clear of an entry written right there.
-                ...(port ? { offset: [0, 24] as [number, number] } : {}),
+                // On a round trip both ports are one place: the second pin goes beside the first.
+                ...(port
+                  ? {
+                      offset: (port === voyage?.destination && sameOriginAndDestination
+                        ? [26, 24]
+                        : [0, 24]) as [number, number],
+                    }
+                  : {}),
               },
             ];
       }),
-    [entries, entryNumbers, boatEntryId, ashore]
+    [entries, entryNumbers, boatEntryId, ashore, voyage, sameOriginAndDestination]
   );
+
+  // The boat's course set against the planned route, while it is under way.
+  const underWay = status === "under_way";
+  // Judged by the server's clock as of this fetch rather than by a clock that
+  // ticks, so that at the twelve-hour mark the answer changes once, not back and forth.
+  const positionIsRecent =
+    stats !== null &&
+    data !== null &&
+    Date.parse(data.server_time) - stats.positionTime < AHEAD_MAX_AGE_MS;
+  // The one course that both the line on the map and the figures under it go by.
+  const course =
+    stats && positionIsRecent ? steadyCourse(stats.courseDeg, stats.speedKn) : null;
+  const plan = useMemo(
+    () =>
+      underWay && stats && voyage
+        ? compareWithPlan(stats.position, course, voyage.planned_route)
+        : null,
+    [underWay, stats, voyage, course]
+  );
+  const ahead = useMemo(
+    () =>
+      underWay && stats ? projectCourse(stats.position, course, stats.speedKn, AHEAD_HOURS) : [],
+    [underWay, stats, course]
+  );
+  const whyNoCourse = !positionIsRecent
+    ? "Last position is old"
+    : stats?.speedKn != null && stats.speedKn < MIN_SPEED_KN
+      ? "Hardly moving"
+      : "Not known yet";
 
   const entriesNewestFirst = useMemo(() => [...entries].reverse(), [entries]);
   const selectedEntry = entries.find((entry) => entry.id === selectedId) ?? null;
@@ -389,6 +445,8 @@ const VoyagePage = () => {
     voyage.planned_route.length,
     // The ports and the two dates decide where entries written in port are drawn.
     JSON.stringify([voyage.origin, voyage.destination, voyage.departure, voyage.arrived_at]),
+    // The course ahead disappears once the last position has grown old.
+    ahead.length,
   ].join(":");
 
   let statusLine: ReactNode;
@@ -478,6 +536,7 @@ const VoyagePage = () => {
           track={trackLine}
           current={stats?.position ?? null}
           headingDeg={stats?.courseDeg ?? null}
+          ahead={ahead}
           from={{ name: voyage.origin.name, pos: origin }}
           to={{ name: voyage.destination.name, pos: destination as LatLon }}
           pins={pins}
@@ -515,6 +574,12 @@ const VoyagePage = () => {
             <span className="w-6 border-t border-dashed border-slate-300/70" />
             Planned
           </li>
+          {ahead.length > 0 ? (
+            <li className="flex items-center gap-2.5">
+              <span className="h-0.5 w-6 rounded-full bg-[hsl(38_95%_62%)]" />
+              Course ahead
+            </li>
+          ) : null}
           <li className="flex items-center gap-2.5">
             <span className="ml-1.5 mr-1.5 h-3 w-3 rounded-full border-2 border-primary" />
             Log entry
@@ -618,6 +683,55 @@ const VoyagePage = () => {
                 </span>
               )}
             </div>
+
+            {plan ? (
+              <div className="mt-4 border-t border-border/60 pt-4">
+                <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-3">
+                  <div>
+                    <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Course now
+                    </dt>
+                    <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
+                      {course === null
+                        ? whyNoCourse
+                        : `${Math.round(course)}° ${compassPoint(course)}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Planned route here
+                    </dt>
+                    <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
+                      {Math.round(plan.plannedDeg)}° {compassPoint(plan.plannedDeg)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Against the plan
+                    </dt>
+                    <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
+                      {plan.turnDeg === null
+                        ? "No course to compare"
+                        : Math.abs(plan.turnDeg) < ON_COURSE_DEG
+                          ? "On the planned course"
+                          : `${Math.abs(plan.turnDeg)}° to the ${plan.turnDeg < 0 ? "left" : "right"}`}
+                    </dd>
+                    <dd className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                      {plan.offRouteNm < ON_ROUTE_NM
+                        ? "On the planned route"
+                        : `${nm(plan.offRouteNm)} nm ${plan.side} of the planned route`}
+                    </dd>
+                  </div>
+                </dl>
+                {ahead.length > 0 ? (
+                  <p className="mt-3 text-[0.68rem] text-muted-foreground">
+                    The orange line on the map is where this course leads over the next{" "}
+                    {AHEAD_HOURS[AHEAD_HOURS.length - 1]} hours at the present speed, with a dot
+                    for each day.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <section aria-label="Key figures" className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
