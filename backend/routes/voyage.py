@@ -650,6 +650,10 @@ async def _build_public(db) -> dict:
 
     if payload["status"] == "under_way" and fixes and now - fixes[-1][0] < WEATHER_MAX_FIX_AGE_S:
         payload["weather"] = _weather_for(fixes[-1][1], fixes[-1][2])
+    elif payload["status"] == "planned":
+        # Before departure: at the port the crossing starts from, which is public
+        # anyway. Never the boat's real whereabouts, which are not published yet.
+        payload["weather"] = _weather_for(main["origin"]["lat"], main["origin"]["lon"])
     return payload
 
 

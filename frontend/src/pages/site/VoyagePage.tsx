@@ -21,7 +21,7 @@ import {
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { compassPoint, distanceNm, formatCoord, type LatLon } from "@/lib/geo";
+import { compassPoint, distanceNm, formatCoord, pathLengthNm, type LatLon } from "@/lib/geo";
 import {
   fetchVoyage,
   photoUrl,
@@ -29,6 +29,7 @@ import {
   type VoyageEntry,
   type VoyagePhotoRef,
   type VoyagePort,
+  type VoyageWeather,
 } from "@/lib/voyageApi";
 import { MIN_SPEED_KN, compareWithPlan, projectCourse, steadyCourse } from "@/lib/voyageCourse";
 import { computeStats, toFixes } from "@/lib/voyageStats";
@@ -117,6 +118,94 @@ const ConditionRow = ({ icon, label, value, detail }: ConditionRowProps) => (
     </div>
   </div>
 );
+
+interface WeatherPanelProps {
+  weather: VoyageWeather;
+  title: string;
+  caption: string;
+  /**
+   * For a place on land. What the forecast has no figure for is left out instead
+   * of reading "No data": the sea-state service often has none inside a harbour.
+   */
+  ashore?: boolean;
+}
+
+const WeatherPanel = ({ weather, title, caption, ashore = false }: WeatherPanelProps) => {
+  const rows = [
+    {
+      key: "wind",
+      missing: weather.wind_kn === null,
+      icon: <Wind className="h-4 w-4" />,
+      label: "Wind",
+      value:
+        weather.wind_kn === null
+          ? "No data"
+          : `${weather.wind_dir_deg === null ? "" : `${compassPoint(weather.wind_dir_deg)} `}${Math.round(weather.wind_kn)} kn`,
+      detail: weather.gust_kn === null ? "" : `Gusts ${Math.round(weather.gust_kn)} kn`,
+    },
+    {
+      key: "waves",
+      missing: weather.wave_m === null,
+      icon: <Waves className="h-4 w-4" />,
+      label: "Waves",
+      value: one(weather.wave_m, "m"),
+      detail:
+        weather.wave_dir_deg === null || weather.wave_period_s === null
+          ? ""
+          : `From the ${compassPoint(weather.wave_dir_deg)}, ${Math.round(weather.wave_period_s)} s apart`,
+    },
+    {
+      key: "air",
+      missing: weather.air_c === null,
+      icon: <Thermometer className="h-4 w-4" />,
+      label: "Air",
+      value: weather.air_c === null ? "No data" : `${Math.round(weather.air_c)} °C`,
+      detail: ashore ? "Two metres above the ground" : "Two metres above the sea",
+    },
+    {
+      key: "water",
+      missing: weather.sea_c === null,
+      icon: <Thermometer className="h-4 w-4" />,
+      label: "Water",
+      value: weather.sea_c === null ? "No data" : `${Math.round(weather.sea_c)} °C`,
+      detail: "Sea surface",
+    },
+  ].filter((row) => !(ashore && row.missing));
+
+  return (
+    <div className="panel-soft rounded-2xl p-5 sm:p-6">
+      <h2 className="font-heading text-base font-semibold text-foreground">{title}</h2>
+      <p className="mt-1 text-xs text-muted-foreground">{caption}</p>
+      {rows.length > 0 ? (
+        <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5">
+          {rows.map((row) => (
+            <ConditionRow
+              key={row.key}
+              icon={row.icon}
+              label={row.label}
+              value={row.value}
+              detail={row.detail}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-muted-foreground">No forecast for this spot right now.</p>
+      )}
+      <p className="mt-4 text-[0.68rem] text-muted-foreground">
+        Weather data by{" "}
+        <a
+          href="https://open-meteo.com/"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-foreground"
+        >
+          Open-Meteo
+        </a>
+        .
+      </p>
+    </div>
+  );
+};
 
 interface Loaded {
   data: VoyageData;
@@ -847,60 +936,11 @@ const VoyagePage = () => {
             </div>
 
             {weather ? (
-              <div className="panel-soft rounded-2xl p-5 sm:p-6">
-                <h2 className="font-heading text-base font-semibold text-foreground">
-                  Weather at the boat
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Forecast for the last position, not measured on board.
-                </p>
-                <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5">
-                  <ConditionRow
-                    icon={<Wind className="h-4 w-4" />}
-                    label="Wind"
-                    value={
-                      weather.wind_kn === null
-                        ? "No data"
-                        : `${weather.wind_dir_deg === null ? "" : `${compassPoint(weather.wind_dir_deg)} `}${Math.round(weather.wind_kn)} kn`
-                    }
-                    detail={weather.gust_kn === null ? "" : `Gusts ${Math.round(weather.gust_kn)} kn`}
-                  />
-                  <ConditionRow
-                    icon={<Waves className="h-4 w-4" />}
-                    label="Waves"
-                    value={one(weather.wave_m, "m")}
-                    detail={
-                      weather.wave_dir_deg === null || weather.wave_period_s === null
-                        ? ""
-                        : `From the ${compassPoint(weather.wave_dir_deg)}, ${Math.round(weather.wave_period_s)} s apart`
-                    }
-                  />
-                  <ConditionRow
-                    icon={<Thermometer className="h-4 w-4" />}
-                    label="Air"
-                    value={weather.air_c === null ? "No data" : `${Math.round(weather.air_c)} °C`}
-                    detail="Two metres above the sea"
-                  />
-                  <ConditionRow
-                    icon={<Thermometer className="h-4 w-4" />}
-                    label="Water"
-                    value={weather.sea_c === null ? "No data" : `${Math.round(weather.sea_c)} °C`}
-                    detail="Sea surface"
-                  />
-                </div>
-                <p className="mt-4 text-[0.68rem] text-muted-foreground">
-                  Weather data by{" "}
-                  <a
-                    href="https://open-meteo.com/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-foreground"
-                  >
-                    Open-Meteo
-                  </a>
-                  .
-                </p>
-              </div>
+              <WeatherPanel
+                weather={weather}
+                title="Weather at the boat"
+                caption="Forecast for the last position, not measured on board."
+              />
             ) : null}
           </section>
         </>
@@ -908,6 +948,52 @@ const VoyagePage = () => {
         <p className="panel-soft mt-5 rounded-2xl px-5 py-5 text-sm text-muted-foreground sm:px-6">
           No position has arrived yet. The track and the figures appear with the first one.
         </p>
+      ) : status === "planned" ? (
+        <section
+          aria-label="The plan"
+          className={cn("mt-5 grid gap-4", weather && "lg:grid-cols-[1.45fr_1fr]")}
+        >
+          <div className="panel-soft rounded-2xl p-5 sm:p-6">
+            <h2 className="font-heading text-base font-semibold text-foreground">The plan</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The distance sailed, the speed and the daily runs appear here once the boat is
+              under way.
+            </p>
+            <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
+              <div>
+                <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Planned route
+                </dt>
+                <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
+                  {nm(pathLengthNm(voyage.planned_route))} nm
+                </dd>
+                <dd className="mt-1 text-xs text-muted-foreground">
+                  Along the dashed line on the map
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Departure
+                </dt>
+                <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
+                  {departure ? dayMonth(departure) : "Not set yet"}
+                </dd>
+                <dd className="mt-1 text-xs text-muted-foreground">
+                  {departure ? clock(departure) : `From ${voyage.origin.name}`}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          {weather ? (
+            <WeatherPanel
+              weather={weather}
+              title={`Weather at ${voyage.origin.name}`}
+              caption="Forecast for the port of departure, now."
+              ashore
+            />
+          ) : null}
+        </section>
       ) : null}
 
       <section className="mt-14 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
