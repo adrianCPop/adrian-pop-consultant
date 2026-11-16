@@ -1474,6 +1474,50 @@ def test_tracker_app_format_and_basic_auth(ctx):
     assert len(ctx.public()["track"]) == 1
 
 
+def test_a_key_pasted_with_a_space_or_a_line_break_after_it_still_works(ctx):
+    # Copied on a phone, a key easily arrives with something invisible after it.
+    ctx.configure()
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    fix = {"_type": "location", "lat": LAT, "lon": LON, "tst": NOW - HOUR}
+    for pasted in (f"{tracker} ", f"{tracker}\n", f" {tracker}\t"):
+        basic = base64.b64encode(f"boat:{pasted}".encode()).decode()
+        res = ctx.client.post("/api/voyage/track", json=fix, headers={"Authorization": f"Basic {basic}"})
+        assert res.status_code == 200, repr(pasted)
+    res = ctx.client.post("/api/voyage/track", json=fix, headers={"X-Voyage-Key": f"{tracker} "})
+    assert res.status_code == 200
+
+
+def test_a_refused_key_is_explained_in_the_log_without_the_key(ctx, caplog):
+    ctx.configure()
+    tracker = ctx.make_key("Phone", "tracker")
+    fix = {"_type": "location", "lat": LAT, "lon": LON, "tst": NOW - HOUR}
+
+    def refused(headers) -> str:
+        caplog.clear()
+        with caplog.at_level("INFO", logger=voyage_routes.logger.name):
+            res = ctx.client.post("/api/voyage/track", json=fix, headers=headers)
+        assert res.status_code == 401
+        return " ".join(record.getMessage() for record in caplog.records)
+
+    # Nothing sent at all, or a user name with no password, as an app with an empty field sends.
+    assert "no key was sent" in refused({})
+    empty = base64.b64encode(b"user:").decode()
+    assert "no key was sent" in refused({"Authorization": f"Basic {empty}"})
+
+    # A key that is not one of ours: its length is said, the key itself never.
+    wrong = "not-the-key-" + "x" * 20
+    basic = base64.b64encode(f"user:{wrong}".encode()).decode()
+    line = refused({"Authorization": f"Basic {basic}"})
+    assert f"{len(wrong)} characters" in line and "matches no link" in line
+    assert wrong not in line and basic not in line
+
+    # A key that was switched off.
+    res = ctx.client.post(f"/api/voyage/admin/keys/{tracker['id']}/revoke", headers=ctx.admin)
+    assert res.status_code == 200
+    line = refused(bearer(tracker["key"]))
+    assert "switched off" in line and tracker["key"] not in line
+
+
 def test_tracker_app_other_messages_are_accepted_and_ignored(ctx):
     ctx.configure()
     tracker = ctx.make_key("Phone", "tracker")["key"]

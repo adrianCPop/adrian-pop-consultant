@@ -220,7 +220,11 @@ def _client_id(request: Request) -> str:
 
 
 def _presented_key(request: Request) -> Optional[str]:
-    """The key, from a Bearer header, the password of Basic auth, or X-Voyage-Key."""
+    """The key, from a Bearer header, the password of Basic auth, or X-Voyage-Key.
+
+    Without the blank a key often picks up when it is pasted on a phone: a key
+    has none of its own.
+    """
     scheme, _, value = request.headers.get("authorization", "").partition(" ")
     scheme, value = scheme.lower(), value.strip()
     if scheme == "bearer" and value:
@@ -230,8 +234,8 @@ def _presented_key(request: Request) -> Optional[str]:
             decoded = base64.b64decode(value).decode("utf-8")
         except ValueError:
             return None
-        return decoded.partition(":")[2] or None
-    return request.headers.get("x-voyage-key") or None
+        return decoded.partition(":")[2].strip() or None
+    return request.headers.get("x-voyage-key", "").strip() or None
 
 
 def _key_auth(*kinds: str):
@@ -240,6 +244,15 @@ def _key_auth(*kinds: str):
         key = _presented_key(request)
         doc = await db.voyage_keys.find_one({"key_hash": core.hash_key(key)}) if key else None
         if not doc or doc.get("revoked_at"):
+            # For whoever is setting a device up, which of the three it was. Never the key.
+            why = (
+                "no key was sent"
+                if not key
+                else "the key has been switched off"
+                if doc
+                else f"a key of {len(key)} characters that matches no link"
+            )
+            logger.info("Key refused on %s: %s", request.url.path, why)
             raise HTTPException(401, "This link is not valid, or it has been switched off")
         if doc["kind"] not in kinds:
             raise HTTPException(403, "This key is not allowed to do that")
