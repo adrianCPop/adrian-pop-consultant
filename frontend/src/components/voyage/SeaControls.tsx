@@ -20,7 +20,8 @@ const gradient = (layer: SeaLayerName) =>
     .map((mark) => `rgb(${mark.rgb.join(" ")}) ${(mark.at / scaleTop(layer)) * 100}%`)
     .join(", ")})`;
 
-export type SeaState = "idle" | "loading" | "failed" | "ready";
+/** `waiting`: the server has said the forecast is on its way and when to ask again. */
+export type SeaState = "idle" | "loading" | "waiting" | "failed" | "ready";
 
 interface SeaControlsProps {
   /** Which forecast is on the map; null for none. */
@@ -69,12 +70,17 @@ const SeaControls = ({
       : away > 0
         ? t("public.sea.ahead", { span: texts.span(away) })
         : t("public.sea.ago", { span: texts.span(-away) });
+  const busy = layer !== null && (state === "loading" || state === "waiting");
   const status =
-    layer !== null && state === "loading"
-      ? t("public.sea.loading")
-      : layer !== null && state === "failed"
-        ? t("public.sea.failed")
-        : "";
+    layer === null
+      ? ""
+      : state === "loading"
+        ? t("public.sea.loading")
+        : state === "waiting"
+          ? t("public.sea.waiting")
+          : state === "failed"
+            ? t("public.sea.failed")
+            : "";
 
   const choice = (value: SeaLayerName | null, label: string, icon?: ReactNode) => (
     <button
@@ -123,9 +129,7 @@ const SeaControls = ({
             status === "" && "sr-only"
           )}
         >
-          {layer !== null && state === "loading" ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : null}
+          {busy ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> : null}
           {status}
         </p>
         {layer !== null && state === "failed" ? (

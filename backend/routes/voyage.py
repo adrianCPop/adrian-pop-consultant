@@ -83,6 +83,11 @@ SEA_MAX_AGE_S = 24 * 3600
 # Whatever a fetch is for (a new route, a first request after a restart), two never
 # begin closer together than this: each is most of a minute's allowance.
 SEA_MIN_GAP_S = 120
+# Nor more than this many in an hour or a day, whatever asks for them: at up to 580
+# points each, that is 4,640 of the 5,000 allowed an hour and 8,120 of the 10,000 a
+# day. Ordinary use is eight a day (two forecasts, each renewed every six hours).
+SEA_MAX_PER_HOUR = 8
+SEA_MAX_PER_DAY = 14
 # All batches of one fetch together. The page stops waiting after half a minute.
 SEA_DEADLINE_S = 25
 
@@ -149,8 +154,9 @@ def _nothing_of_the_sea(key=None) -> dict:
 # seconds since 1970, because all of it is also kept in the database: a restart
 # must not cost a fetch.
 _sea = {layer: _nothing_of_the_sea() for layer in core.SEA_LAYERS}
-# When the last fetch began, whichever layer and grid it was for.
-_sea_started = {"at": 0.0}
+# When fetches began in the last day (oldest first), whatever they were for, and
+# which forecast is being fetched at this moment.
+_sea_starts = {"recent": [], "running": None}
 _background: set = set()
 _locks: dict = {}
 _admin_waiting = 0
@@ -165,7 +171,7 @@ def reset_runtime_state() -> None:
     _weather_pending.clear()
     for layer in _sea:
         _sea[layer] = _nothing_of_the_sea()
-    _sea_started["at"] = 0.0
+    _sea_starts.update({"recent": [], "running": None})
     _locks.clear()
     _public_cache.update({"at": 0.0, "payload": None, "built": -1, "version": 0})
     _admin_waiting = 0
@@ -619,83 +625,133 @@ def _weather_for(lat: float, lon: float) -> Optional[dict]:
     return None
 
 
-async def _note_sea(db, layer: str, fields: dict) -> None:
+async def _note_sea(db, record: str, fields: dict) -> bool:
     try:
-        await db.voyage_sea.update_one({"_id": layer}, {"$set": fields}, upsert=True)
+        await db.voyage_sea.update_one({"_id": record}, {"$set": fields}, upsert=True)
+        return True
     except Exception as error:
-        logger.warning("Forecast of %s: could not be written down: %s", layer, error)
+        logger.warning("Forecasts: %s could not be written down: %r", record, error)
+        return False
 
 
-async def _recall_sea(db, layer: str, key) -> None:
-    """What the database remembers of a forecast, after a restart or a change of route."""
+async def _recall_sea(db, layer: str, key) -> bool:
+    """What the database remembers, after a restart or a change of route.
+
+    False when the database could not be read: nothing may be fetched then, as a
+    fetch made just before would not be known of.
+    """
     try:
         stored = await db.voyage_sea.find({}).to_list(length=None)
     except Exception as error:
-        logger.warning("Forecast of %s: the stored one could not be read: %s", layer, error)
-        return
-    for doc in stored:
-        # When the last fetch began counts whatever it was for.
-        _sea_started["at"] = max(_sea_started["at"], float(doc.get("started") or 0))
-        if doc["_id"] != layer or tuple(doc.get("key") or ()) != key:
-            continue
-        body = doc.get("body")
-        _sea[layer].update(
-            {
-                "checked": doc.get("checked"),
-                "fetched": doc.get("fetched"),
-                "body": bytes(body) if body is not None else None,
-                "failures": int(doc.get("failures") or 0),
-            }
-        )
+        logger.warning("Forecasts: the stored ones could not be read: %r", error)
+        return False
 
-
-async def _refresh_sea(db, layer: str, grid: dict, key) -> None:
-    _sea_started["at"] = time.time()
-    await _note_sea(db, layer, {"started": _sea_started["at"]})
-    body = None
-    try:
-        forecast = await asyncio.wait_for(core.fetch_sea(grid, layer), SEA_DEADLINE_S)
-        if forecast:
-            body = json.dumps(
-                {
-                    "layer": layer,
-                    "fetched": core.to_iso(int(time.time())),
-                    **grid,
-                    "interval_h": core.SEA_INTERVAL_H,
-                    # What `value` was multiplied by to be sent as a whole number.
-                    "scale": core.SEA_LAYERS[layer]["figures"][0][2],
-                    **forecast,
-                },
-                separators=(",", ":"),
-            ).encode()
-    except asyncio.CancelledError:
-        # The request that was waiting for this went away. That says nothing about
-        # the service, so it is not counted as a failure of it.
-        raise
-    except Exception as error:
-        logger.warning("Forecast of %s: refresh failed: %r", layer, error)
-
-    state = _sea[layer]
-    # The route may have been changed while the service was answering.
-    if state["key"] != key:
-        return
     now = time.time()
-    state["checked"] = now
-    if body is None:
-        state["failures"] += 1
-    else:
-        state.update({"body": body, "fetched": now, "failures": 0})
-    await _note_sea(
-        db,
-        layer,
-        {
-            "key": list(key),
-            "checked": state["checked"],
-            "fetched": state["fetched"],
-            "failures": state["failures"],
-            "body": state["body"],
-        },
-    )
+    for doc in stored:
+        try:
+            if doc.get("_id") == "starts":
+                # A time in the future is a clock that has been set back: counted as now.
+                known = {min(float(value), now) for value in doc.get("recent") or []}
+                known.update(_sea_starts["recent"])
+                _sea_starts["recent"] = sorted(t for t in known if now - t < 86400)
+            elif doc.get("_id") == layer and tuple(doc.get("key") or ()) == key:
+                body = doc.get("body")
+                checked, fetched = doc.get("checked"), doc.get("fetched")
+                recalled = {
+                    "checked": None if checked is None else min(float(checked), now),
+                    "fetched": None if fetched is None else min(float(fetched), now),
+                    "body": bytes(body) if body is not None else None,
+                    "failures": int(doc.get("failures") or 0),
+                }
+                _sea[layer].update(recalled)
+        except (TypeError, ValueError) as error:
+            logger.warning("Forecasts: a stored record could not be made sense of: %r", error)
+            if doc.get("_id") == "starts":
+                # What it said is lost. To be safe, as if a fetch had only just begun.
+                _sea_starts["recent"] = sorted({*_sea_starts["recent"], now})
+    return True
+
+
+def _sea_wait() -> float:
+    """How long until another fetch may begin: the gap, and the most in an hour and a day."""
+    now = time.time()
+    recent = [t for t in _sea_starts["recent"] if now - t < 86400]
+    _sea_starts["recent"] = recent
+    waits = [0.0]
+    if recent:
+        waits.append(recent[-1] + SEA_MIN_GAP_S - now)
+    hour = [t for t in recent if now - t < 3600]
+    if len(hour) >= SEA_MAX_PER_HOUR:
+        waits.append(hour[-SEA_MAX_PER_HOUR] + 3600 - now)
+    if len(recent) >= SEA_MAX_PER_DAY:
+        waits.append(recent[-SEA_MAX_PER_DAY] + 86400 - now)
+    return max(waits)
+
+
+def _sea_begin(layer: str, key) -> float:
+    """Marks a fetch as begun, at once, so that nothing else begins one meanwhile."""
+    begun = time.time()
+    _sea_starts["recent"].append(begun)
+    _sea_starts["running"] = (layer, key)
+    return begun
+
+
+async def _refresh_sea(db, layer: str, grid: dict, key, begun: float) -> None:
+    try:
+        if not await _note_sea(db, "starts", {"recent": _sea_starts["recent"]}):
+            # Unwritten, this fetch would be unknown after a restart, and another
+            # could begin on its heels. Better none now.
+            if begun in _sea_starts["recent"]:
+                _sea_starts["recent"].remove(begun)
+            return
+
+        body = None
+        try:
+            forecast = await asyncio.wait_for(core.fetch_sea(grid, layer), SEA_DEADLINE_S)
+            if forecast:
+                body = json.dumps(
+                    {
+                        "layer": layer,
+                        "fetched": core.to_iso(int(time.time())),
+                        **grid,
+                        "interval_h": core.SEA_INTERVAL_H,
+                        # What `value` was multiplied by to be sent as a whole number.
+                        "scale": core.SEA_LAYERS[layer]["figures"][0][2],
+                        **forecast,
+                    },
+                    separators=(",", ":"),
+                ).encode()
+        except asyncio.CancelledError:
+            # The request that was waiting for this went away. That says nothing
+            # about the service, so it is not counted as a failure of it.
+            raise
+        except Exception as error:
+            logger.warning("Forecast of %s: refresh failed: %r", layer, error)
+
+        state = _sea[layer]
+        # The route may have been changed while the service was answering.
+        if state["key"] != key:
+            return
+        now = time.time()
+        state["checked"] = now
+        if body is None:
+            state["failures"] += 1
+        else:
+            state.update({"body": body, "fetched": now, "failures": 0})
+        await _note_sea(
+            db,
+            layer,
+            {
+                "key": list(key),
+                "checked": state["checked"],
+                "fetched": state["fetched"],
+                "failures": state["failures"],
+                "body": state["body"],
+            },
+        )
+    finally:
+        if _sea_starts["running"] == (layer, key):
+            _sea_starts["running"] = None
 
 
 def _sea_is_fresh(layer: str) -> bool:
@@ -708,11 +764,6 @@ def _sea_is_fresh(layer: str) -> bool:
         else min(SEA_TTL_S, SEA_RETRY_S * 2 ** (state["failures"] - 1))
     )
     return time.time() - state["checked"] < wait
-
-
-def _sea_wait() -> float:
-    """How long until another fetch may begin."""
-    return max(0.0, SEA_MIN_GAP_S - (time.time() - _sea_started["at"]))
 
 
 def _sea_in_hand(layer: str) -> Optional[bytes]:
@@ -728,33 +779,37 @@ async def _sea_body(db, layer: str, grid: dict) -> Optional[bytes]:
 
     While there is one in hand, a refresh happens in the background and nobody
     waits for the service. With none in hand the first visitor waits for it, and
-    anyone arriving meanwhile waits for that same fetch. A fetch never begins
-    within two minutes of the one before, whatever either was for; as one fetch
-    is given 25 seconds at most, that also means two never run at once.
+    anyone asking for the same one meanwhile waits for that same fetch. Anyone
+    asking for another is told at once that it is not its turn: a fetch never
+    begins within two minutes of the one before, whatever either was for, and as
+    one fetch is given 25 seconds at most, two never run at once.
     """
     key = tuple(grid[name] for name in ("south", "west", "step", "rows", "cols"))
     if _sea[layer]["key"] != key or not _sea[layer]["recalled"]:
-        async with _lock("sea"):
+        async with _lock("sea-recall"):
             if _sea[layer]["key"] != key:
                 _sea[layer] = _nothing_of_the_sea(key)
             if not _sea[layer]["recalled"]:
-                await _recall_sea(db, layer, key)
+                if not await _recall_sea(db, layer, key):
+                    return None
                 _sea[layer]["recalled"] = True
 
     if not _sea_is_fresh(layer):
         if _sea_in_hand(layer) is not None:
-            if _sea_wait() == 0:
-                # Marked as begun here, before the task gets to run, so that the
-                # next visitor does not start a second one.
-                _sea_started["at"] = time.time()
-                task = asyncio.create_task(_refresh_sea(db, layer, grid, key))
+            if _sea_wait() <= 0:
+                begun = _sea_begin(layer, key)
+                task = asyncio.create_task(_refresh_sea(db, layer, grid, key, begun))
                 _background.add(task)
                 task.add_done_callback(_background.discard)
-        else:
+        elif _sea_starts["running"] == (layer, key):
+            # This very forecast is on its way: wait for it rather than be sent away.
+            async with _lock("sea"):
+                pass
+        elif _sea_wait() <= 0:
             async with _lock("sea"):
                 # Whoever waited here may find the work done, or the route changed.
-                if _sea[layer]["key"] == key and not _sea_is_fresh(layer) and _sea_wait() == 0:
-                    await _refresh_sea(db, layer, grid, key)
+                if _sea[layer]["key"] == key and not _sea_is_fresh(layer) and _sea_wait() <= 0:
+                    await _refresh_sea(db, layer, grid, key, _sea_begin(layer, key))
     return _sea_in_hand(layer) if _sea[layer]["key"] == key else None
 
 
@@ -907,10 +962,13 @@ async def sea_forecast(layer: str = "waves", db=Depends(get_db)):
             # Not a failure: it has not been its turn yet. Worth asking again then.
             answer["retry_in"] = math.ceil(_sea_wait()) + 2
         return JSONResponse(status_code=503, content=answer)
+    # One that is due to be replaced (a newer one is being fetched, or will be at
+    # the next turn) is not to be kept by browsers for long.
+    keep = 900 if _sea_is_fresh(layer) else 60
     return Response(
         content=body,
         media_type="application/json",
-        headers={"Cache-Control": "public, max-age=900"},
+        headers={"Cache-Control": f"public, max-age={keep}"},
     )
 
 

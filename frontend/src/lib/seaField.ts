@@ -145,15 +145,94 @@ export const sampleSea = (
   };
 };
 
-/** The largest figure anywhere on the grid at a time step: metres or knots. Null when there is none. */
+/**
+ * The largest figure on the grid at a time step: metres or knots. Null when
+ * there is none. The outermost points are left out, as they are for the arrows:
+ * the picture has faded away there, and "the most in this area" should be
+ * somewhere the map shows it.
+ */
 export const seaMax = (sea: SeaForecast, step: number): number | null => {
+  const values = sea.value[step];
+  if (!values) {
+    return null;
+  }
+  const inset = sea.rows > 2 && sea.cols > 2 ? 1 : 0;
   let most: number | null = null;
-  for (const value of sea.value[step] ?? []) {
-    if (value !== null && value !== undefined && (most === null || value > most)) {
-      most = value;
+  for (let row = inset; row < sea.rows - inset; row += 1) {
+    for (let col = inset; col < sea.cols - inset; col += 1) {
+      const value = values[row * sea.cols + col];
+      if (value !== null && value !== undefined && (most === null || value > most)) {
+        most = value;
+      }
     }
   }
   return most === null ? null : most / sea.scale;
+};
+
+/** A forecast fetched longer ago than this is not drawn as the days ahead. The server sends none that old either. */
+export const SEA_MAX_AGE_MS = 24 * 3_600_000;
+/** How long the server keeps a forecast before it fetches a newer one. */
+const SERVER_KEEPS_MS = 6 * 3_600_000;
+/** How often a page asks again for a forecast it is showing. */
+export const SEA_REFRESH_MS = 30 * 60_000;
+/** The same, when the one it got was already due to be replaced: a newer one is on its way. */
+const SEA_REFRESH_SOON_MS = 2 * 60_000;
+/** Never more often than this, whatever the reason. */
+const SEA_ASK_GAP_MS = 60_000;
+
+/** Whether a forecast was fetched too long ago to be shown at all. `now`: the server's clock, in ms. */
+export const seaTooOld = (sea: SeaForecast, now: number): boolean => {
+  const fetched = Date.parse(sea.fetched);
+  return Number.isNaN(fetched) || now - fetched > SEA_MAX_AGE_MS;
+};
+
+/**
+ * Whether a page showing a forecast should ask the server for it again.
+ * `gotAt` and `askedAt`: when the page last received it and last asked for it,
+ * by its own clock, as `now` is; `serverNow`: the server's clock, to judge the
+ * forecast's own age by.
+ */
+export const seaRefreshDue = (
+  sea: SeaForecast,
+  { gotAt, askedAt, now, serverNow }: { gotAt: number; askedAt: number; now: number; serverNow: number }
+): boolean => {
+  if (now - askedAt < SEA_ASK_GAP_MS) {
+    return false;
+  }
+  if (seaTooOld(sea, serverNow)) {
+    return true;
+  }
+  const dueAtTheServer = serverNow - Date.parse(sea.fetched) > SERVER_KEEPS_MS;
+  return now - gotAt > (dueAtTheServer ? SEA_REFRESH_SOON_MS : SEA_REFRESH_MS);
+};
+
+/** Whether what the server sent is a forecast the page can draw. */
+export const isSeaForecast = (data: unknown): data is SeaForecast => {
+  const sea = data as Partial<SeaForecast> | null;
+  if (!sea || typeof sea !== "object") {
+    return false;
+  }
+  const numbers = [sea.south, sea.west, sea.step, sea.rows, sea.cols, sea.scale];
+  if (!numbers.every((value) => typeof value === "number" && Number.isFinite(value))) {
+    return false;
+  }
+  const cells = (sea.rows as number) * (sea.cols as number);
+  const steps = Array.isArray(sea.times) ? sea.times.length : 0;
+  const whole = (figures: unknown) =>
+    Array.isArray(figures) &&
+    figures.length === steps &&
+    figures.every((row) => Array.isArray(row) && row.length === cells);
+  return (
+    (sea.layer === "waves" || sea.layer === "wind") &&
+    typeof sea.fetched === "string" &&
+    (sea.rows as number) >= 2 &&
+    (sea.cols as number) >= 2 &&
+    (sea.scale as number) > 0 &&
+    steps > 0 &&
+    whole(sea.value) &&
+    whole(sea.direction) &&
+    whole(sea.extra)
+  );
 };
 
 interface ScaleMark {

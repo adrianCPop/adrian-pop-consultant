@@ -32,8 +32,16 @@ const mercatorY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.P
  * being rebuilt costs nothing.
  */
 const painted = new WeakMap<SeaForecast, Map<number, string>>();
-/** The spot whose figures are shown. Kept here so that it outlives a rebuilt map. */
+/**
+ * The spot whose figures are shown. Kept here so that it outlives a rebuilt map
+ * and a change from one forecast to the other.
+ */
 let readoutAt: { lat: number; lng: number } | null = null;
+
+/** For when the visitor switches the forecasts off: the next one starts with no spot picked. */
+export const forgetSeaSpot = () => {
+  readoutAt = null;
+};
 
 const paint = (forecast: SeaForecast, step: number): string | null => {
   let steps = painted.get(forecast);
@@ -200,11 +208,7 @@ export const createSeaLayer = (
       drawArrows();
       writeReadout();
     },
-    hide: () => {
-      clear();
-      // Switched off by the visitor: the spot is forgotten with it.
-      readoutAt = null;
-    },
+    hide: clear,
     remove: () => {
       clear();
       map.off("moveend", drawArrows);

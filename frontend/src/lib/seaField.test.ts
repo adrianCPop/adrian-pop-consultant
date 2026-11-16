@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   arrowStride,
+  isSeaForecast,
   nearestStep,
   paintSea,
   sampleSea,
@@ -9,6 +10,8 @@ import {
   seaBounds,
   seaColor,
   seaMax,
+  seaRefreshDue,
+  seaTooOld,
   SEA_SCALES,
   type SeaForecast,
 } from "@/lib/seaField";
@@ -111,15 +114,83 @@ describe("sampleSea, the forecast at one spot", () => {
 });
 
 describe("seaMax", () => {
-  it("finds the largest figure of a time step", () => {
-    expect(seaMax(flat, 0)).toBe(3);
-    expect(seaMax(flat, 1)).toBe(4);
-    expect(seaMax(waves([null, null, 12, null]), 0)).toBe(1.2);
+  it("finds the largest figure of a time step, away from the edge where the picture fades", () => {
+    // Five by five: 9.9 m on the outermost ring, 2.4 m the most inside it.
+    const ringed = waves(
+      Array.from({ length: 25 }, (_, index) => {
+        const row = Math.floor(index / 5);
+        const col = index % 5;
+        return row === 0 || row === 4 || col === 0 || col === 4 ? 99 : 10 + index;
+      }),
+      { cols: 5 }
+    );
+    expect(seaMax(ringed, 0)).toBe(2.8);
+    expect(seaMax(ringed, 1)).toBe(3.8);
+  });
+
+  it("goes by every point of a grid too small to have an inside", () => {
+    expect(seaMax(waves([null, 7, 12, null], { cols: 2 }), 0)).toBe(1.2);
   });
 
   it("has none where there is nothing", () => {
     expect(seaMax(waves([null, null, null, null], { cols: 2 }), 0)).toBeNull();
     expect(seaMax(flat, 9)).toBeNull();
+  });
+});
+
+describe("how old a forecast may be", () => {
+  const fetched = Date.parse(flat.fetched);
+  const HOUR = 3_600_000;
+  const MINUTE = 60_000;
+
+  it("is not shown at all once it is a day old, or when its date cannot be read", () => {
+    expect(seaTooOld(flat, fetched + 23 * HOUR)).toBe(false);
+    expect(seaTooOld(flat, fetched + 25 * HOUR)).toBe(true);
+    expect(seaTooOld({ ...flat, fetched: "some time ago" }, fetched)).toBe(true);
+  });
+
+  it("is asked for again half an hour after the page got it", () => {
+    const got = { gotAt: 1_000_000, askedAt: 1_000_000, serverNow: fetched + HOUR };
+    expect(seaRefreshDue(flat, { ...got, now: 1_000_000 + 29 * MINUTE })).toBe(false);
+    expect(seaRefreshDue(flat, { ...got, now: 1_000_000 + 31 * MINUTE })).toBe(true);
+  });
+
+  it("is asked for again within minutes when the server sent one it was about to replace", () => {
+    // Fetched seven hours before: the server keeps one for six, so a newer one is on its way.
+    const got = { gotAt: 1_000_000, askedAt: 1_000_000, serverNow: fetched + 7 * HOUR };
+    expect(seaRefreshDue(flat, { ...got, now: 1_000_000 + 1.5 * MINUTE })).toBe(false);
+    expect(seaRefreshDue(flat, { ...got, now: 1_000_000 + 3 * MINUTE })).toBe(true);
+  });
+
+  it("is asked for again at once when it has become too old to show", () => {
+    const got = { gotAt: 1_000_000, askedAt: 1_000_000 - 5 * MINUTE, serverNow: fetched + 25 * HOUR };
+    expect(seaRefreshDue(flat, { ...got, now: 1_000_000 + MINUTE })).toBe(true);
+  });
+
+  it("is never asked for twice within a minute", () => {
+    const now = 1_000_000 + 40 * MINUTE;
+    const asked = { gotAt: 1_000_000, askedAt: now - 30_000 };
+    expect(seaRefreshDue(flat, { ...asked, now, serverNow: fetched + HOUR })).toBe(false);
+    expect(seaRefreshDue(flat, { ...asked, now, serverNow: fetched + 25 * HOUR })).toBe(false);
+  });
+});
+
+describe("isSeaForecast, what the page will try to draw", () => {
+  it("takes a forecast as the server sends it", () => {
+    expect(isSeaForecast(flat)).toBe(true);
+    expect(isSeaForecast({ ...flat, layer: "wind", scale: 1 })).toBe(true);
+  });
+
+  it("refuses anything else that arrives with a 200", () => {
+    expect(isSeaForecast(null)).toBe(false);
+    expect(isSeaForecast("<html>Sign in to the harbour Wi-Fi</html>")).toBe(false);
+    expect(isSeaForecast({ detail: "nope" })).toBe(false);
+    expect(isSeaForecast({ ...flat, layer: "tides" })).toBe(false);
+    expect(isSeaForecast({ ...flat, times: [] , value: [], direction: [], extra: [] })).toBe(false);
+    expect(isSeaForecast({ ...flat, rows: 4 })).toBe(false);
+    expect(isSeaForecast({ ...flat, value: [flat.value[0]] })).toBe(false);
+    expect(isSeaForecast({ ...flat, scale: 0 })).toBe(false);
+    expect(isSeaForecast({ ...flat, direction: undefined })).toBe(false);
   });
 });
 
@@ -253,6 +324,21 @@ describe("paintSea, the picture laid over the map", () => {
     const middle = pixel(pixels, 40, 20, 50);
     // Heights were set equal to a tenth of the latitude: 3.6 m at 36 N, 3.0 m at 30 N.
     expect(distance(middle, 3.6)).toBeLessThan(distance(middle, 3.0));
+  });
+
+  it("paints wind by the wind's own scale, in knots as they are sent", () => {
+    // 20 knots everywhere. Read as waves it would be off the top of that scale.
+    const wind: SeaForecast = {
+      ...waves([20, 20, 20, 20, 20, 20, 20, 20, 20]),
+      layer: "wind",
+      scale: 1,
+    };
+    const painted = pixel(paintSea(wind, 0, 40, 40), 40, 20, 20);
+    const near = (rgba: number[], colour: number[]) =>
+      colour.slice(0, 3).reduce((sum, value, channel) => sum + Math.abs(value - rgba[channel]), 0);
+    expect(near(painted, seaColor("wind", 20))).toBeLessThan(6);
+    expect(near(painted, seaColor("waves", 20))).toBeGreaterThan(60);
+    expect(near(painted, seaColor("wind", 2))).toBeGreaterThan(60);
   });
 
   it("paints nothing for a time step that does not exist", () => {

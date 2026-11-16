@@ -452,9 +452,8 @@ SEA_LAYERS = {
 }
 
 
-async def _forecast_json(url: str, params: dict):
-    async with httpx.AsyncClient(timeout=8.0) as client:
-        response = await client.get(url, params=params)
+async def _forecast_json(client, url: str, params: dict):
+    response = await client.get(url, params=params)
     if response.status_code != 200:
         raise RuntimeError(f"the weather service answered {response.status_code}")
     return response.json()
@@ -495,57 +494,60 @@ async def fetch_sea(grid: dict, layer: str = "waves", now: Optional[float] = Non
 
     times: Optional[List[str]] = None
     sea: Dict[str, List[List[Optional[int]]]] = {}
-    for start in range(0, total, SEA_CHUNK):
-        batch = [place(index) for index in range(start, min(start + SEA_CHUNK, total))]
-        # One batch after another, and none after one that fails: every point asked
-        # for is counted, whether or not the rest of the forecast can be put together.
-        try:
-            answer = await _forecast_json(
-                spec["url"],
-                {
-                    "latitude": ",".join(f"{lat:g}" for lat, _ in batch),
-                    "longitude": ",".join(f"{lon:g}" for _, lon in batch),
-                    **request,
-                },
-            )
-        except Exception as error:
-            logger.warning("Forecast of %s failed: %s", layer, error)
-            return None
-
-        # Asked about one place, the service answers with that place, not a list of one.
-        locations = answer if isinstance(answer, list) else [answer]
-        if len(locations) != len(batch):
-            logger.warning("Forecast of %s: %s places asked, %s answered", layer, len(batch), len(locations))
-            return None
-        for offset, location in enumerate(locations):
-            hourly = (location if isinstance(location, dict) else {}).get("hourly") or {}
-            stamps = hourly.get("time") or []
-            if times is None:
-                if not stamps:
-                    return None
-                times = list(stamps)
-                sea = {ours: [[None] * total for _ in times] for ours, _, _ in spec["figures"]}
-            elif list(stamps) != times:
-                logger.warning("Forecast of %s: the places do not share one set of times", layer)
+    # One connection for all the batches of a fetch.
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        for start in range(0, total, SEA_CHUNK):
+            batch = [place(index) for index in range(start, min(start + SEA_CHUNK, total))]
+            # One batch after another, and none after one that fails: every point asked
+            # for is counted, whether or not the rest of the forecast can be put together.
+            try:
+                answer = await _forecast_json(
+                    client,
+                    spec["url"],
+                    {
+                        "latitude": ",".join(f"{lat:g}" for lat, _ in batch),
+                        "longitude": ",".join(f"{lon:g}" for _, lon in batch),
+                        **request,
+                    },
+                )
+            except Exception as error:
+                logger.warning("Forecast of %s failed: %r", layer, error)
                 return None
 
-            index = start + offset
-            main, *others = spec["figures"]
-            series = {ours: hourly.get(theirs) or [] for ours, theirs, _ in spec["figures"]}
-            for moment in range(len(times)):
-                def figure(ours: str, scale: float) -> Optional[int]:
-                    values = series[ours]
-                    return _whole(values[moment], scale) if moment < len(values) else None
+            # Asked about one place, the service answers with that place, not a list of one.
+            locations = answer if isinstance(answer, list) else [answer]
+            if len(locations) != len(batch):
+                logger.warning("Forecast of %s: %s places asked, %s answered", layer, len(batch), len(locations))
+                return None
+            for offset, location in enumerate(locations):
+                hourly = (location if isinstance(location, dict) else {}).get("hourly") or {}
+                stamps = hourly.get("time") or []
+                if times is None:
+                    if not stamps:
+                        return None
+                    times = list(stamps)
+                    sea = {ours: [[None] * total for _ in times] for ours, _, _ in spec["figures"]}
+                elif list(stamps) != times:
+                    logger.warning("Forecast of %s: the places do not share one set of times", layer)
+                    return None
 
-                value = figure(main[0], main[2])
-                if value is None:
-                    continue
-                sea[main[0]][moment][index] = value
-                for ours, _, scale in others:
-                    other = figure(ours, scale)
-                    if other is not None and ours == "direction":
-                        other %= 360
-                    sea[ours][moment][index] = other
+                index = start + offset
+                main, *others = spec["figures"]
+                series = {ours: hourly.get(theirs) or [] for ours, theirs, _ in spec["figures"]}
+                for moment in range(len(times)):
+                    def figure(ours: str, scale: float) -> Optional[int]:
+                        values = series[ours]
+                        return _whole(values[moment], scale) if moment < len(values) else None
+
+                    value = figure(main[0], main[2])
+                    if value is None:
+                        continue
+                    sea[main[0]][moment][index] = value
+                    for ours, _, scale in others:
+                        other = figure(ours, scale)
+                        if other is not None and ours == "direction":
+                            other %= 360
+                        sea[ours][moment][index] = other
 
     if times is None or not any(value is not None for row in sea["value"] for value in row):
         return None

@@ -103,13 +103,19 @@ start) and for the most anywhere in the area.
   - the grid is kept under 580 points: two degrees apart for an Atlantic
     crossing, coarser for a longer route;
   - two fetches never begin within two minutes of each other, whatever they are
-    for (waves, wind, a changed route). A page that asks in between is told when
-    to ask again and does so by itself;
-  - each forecast is also kept in the database (`voyage_sea`), with the time it
-    was last asked for, so a restart of the server costs no fetch;
+    for (waves, wind, a changed route), and never more than 8 in an hour or 14
+    in a day. A page that asks in between is told when to ask again and does so
+    by itself;
+  - each forecast is also kept in the database (`voyage_sea`), with the times
+    fetches began, so a restart of the server costs no fetch. A fetch that
+    cannot be written down there first is not made;
   - a failing service is asked again after half an hour, then after longer and
     longer.
   In normal use that is about 4,400 calls a day when both are being looked at.
+- A page that keeps a forecast on the map asks the server for it again every
+  half hour, within two minutes when the one it got was about to be replaced,
+  and when its tab is come back to. One fetched more than a day ago is not
+  drawn.
 - The service's "bounding box" mode is not used: it returns every cell of a
   model in the box (about 22,000 for this area) and counts each as a call.
 - Known limits of a two-degree grid: the colour reaches up to a degree over the

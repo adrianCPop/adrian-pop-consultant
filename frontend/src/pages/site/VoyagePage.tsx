@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import SeaControls, { type SeaState } from "@/components/voyage/SeaControls";
+import { forgetSeaSpot } from "@/components/voyage/seaLayer";
 import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,8 @@ import {
   nearestStep,
   sampleSea,
   seaMax,
+  seaRefreshDue,
+  seaTooOld,
   type SeaForecast,
   type SeaLayerName,
   type SeaSample,
@@ -49,10 +52,10 @@ import { computeStats, toFixes } from "@/lib/voyageStats";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 5 * 60_000;
-/** While a forecast is on the map, it is asked for again this often. The server has a new one every six hours. */
-const SEA_REFRESH_MS = 30 * 60_000;
 /** How many times a forecast that is "on its way" is asked for before giving up. */
 const SEA_TRIES = 4;
+/** The server spaces its fetches two minutes apart. Told to wait much longer, the page says it failed instead. */
+const SEA_LONGEST_WAIT_S = 180;
 const DAY_MS = 86_400_000;
 /** Past this long without a position, the status dot turns amber. */
 const QUIET_MS = 24 * 3_600_000;
@@ -237,7 +240,10 @@ const VoyagePage = () => {
     wind: "idle",
   });
   const [seaMoment, setSeaMoment] = useState<number | null>(null);
-  const seaTimers = useRef<number[]>([]);
+  const seaTimers = useRef(new Set<number>());
+  /** For each forecast, when the page last got it and last asked for it. */
+  const seaClock = useRef<Partial<Record<SeaLayerName, { gotAt: number; askedAt: number }>>>({});
+  const mounted = useRef(true);
   /** The entry opened over the page from the map, and which of its photos is shown large. */
   const [opened, setOpened] = useState<{ id: string; photo: number } | null>(null);
   /** Set when the overlay is closed in order to go to the entry in the logbook. */
@@ -273,7 +279,13 @@ const VoyagePage = () => {
       }
     }, REFRESH_MS);
     const tick = window.setInterval(() => setNow(Date.now()), 60_000);
-    const onVisible = () => document.visibilityState === "visible" && void load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        // The clock too: what is shown by age (a forecast on the map) is looked at again.
+        setNow(Date.now());
+        void load();
+      }
+    };
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
@@ -554,8 +566,8 @@ const VoyagePage = () => {
    * spaces its own requests to the weather service out) is asked for again when
    * the server says, a few times.
    *
-   * It depends on nothing that changes, so the timer that refreshes it is not
-   * restarted every time the page's data is.
+   * It depends on nothing that changes, so nothing that calls it is set off
+   * again every time the page's data is refreshed.
    */
   const loadSea = useCallback(async (layer: SeaLayerName, quietly = false, triesLeft = SEA_TRIES) => {
     const setState = (state: SeaState) =>
@@ -563,19 +575,32 @@ const VoyagePage = () => {
     if (!quietly) {
       setState("loading");
     }
+    seaClock.current[layer] = { gotAt: seaClock.current[layer]?.gotAt ?? 0, askedAt: Date.now() };
     try {
       const forecast = await fetchSea(layer);
+      if (!mounted.current) {
+        return;
+      }
+      seaClock.current[layer] = { gotAt: Date.now(), askedAt: Date.now() };
       setSeaForecasts((current) => ({ ...current, [layer]: forecast }));
       setState("ready");
     } catch (error) {
+      if (!mounted.current) {
+        return;
+      }
       const retryIn =
         error instanceof ApiError && error.status === 503
           ? Number((error.body as { retry_in?: unknown } | null)?.retry_in)
           : Number.NaN;
-      if (Number.isFinite(retryIn) && retryIn > 0 && triesLeft > 1) {
-        seaTimers.current.push(
-          window.setTimeout(() => void loadSea(layer, quietly, triesLeft - 1), retryIn * 1000)
-        );
+      if (retryIn > 0 && retryIn <= SEA_LONGEST_WAIT_S && triesLeft > 1) {
+        if (!quietly) {
+          setState("waiting");
+        }
+        const timer = window.setTimeout(() => {
+          seaTimers.current.delete(timer);
+          void loadSea(layer, quietly, triesLeft - 1);
+        }, retryIn * 1000);
+        seaTimers.current.add(timer);
       } else if (!quietly) {
         setState("failed");
       }
@@ -584,34 +609,48 @@ const VoyagePage = () => {
 
   useEffect(() => {
     const timers = seaTimers.current;
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+    };
   }, []);
 
   const chooseSea = (layer: SeaLayerName | null) => {
     setSeaLayer(layer);
-    if (layer && (seaStates[layer] === "idle" || seaStates[layer] === "failed")) {
+    if (layer === null) {
+      forgetSeaSpot();
+    } else if (seaStates[layer] === "idle" || seaStates[layer] === "failed") {
       void loadSea(layer);
     }
   };
 
   // After landfall there is no forecast, and nothing left to switch one off with.
   const seaOffered = Boolean(data?.sea) && status !== "arrived";
-  const seaForecast = seaOffered && seaLayer ? seaForecasts[seaLayer] ?? null : null;
-  const seaState: SeaState = seaLayer ? seaStates[seaLayer] : "idle";
+  const seaLoaded = seaOffered && seaLayer ? seaForecasts[seaLayer] ?? null : null;
+  // One fetched more than a day ago is not drawn as the days ahead, even if it is all there is.
+  const seaForecast = seaLoaded && !seaTooOld(seaLoaded, serverNow) ? seaLoaded : null;
+  const seaState: SeaState = !seaLayer
+    ? "idle"
+    : seaLoaded && !seaForecast && seaStates[seaLayer] === "ready"
+      ? "loading"
+      : seaStates[seaLayer];
   const seaShown = seaForecast !== null && seaState === "ready";
   const seaStep = seaForecast ? nearestStep(seaForecast.times, seaMoment ?? serverNow) : 0;
 
+  // The forecast on the map is asked for again when it is due: looked at every
+  // minute, when the tab is come back to, and when a forecast is chosen.
   useEffect(() => {
-    if (!seaShown || !seaLayer) {
+    const clock = seaLayer ? seaClock.current[seaLayer] : undefined;
+    if (!seaLayer || !seaLoaded || !clock || document.visibilityState !== "visible") {
       return;
     }
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void loadSea(seaLayer, true);
-      }
-    }, SEA_REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [seaShown, seaLayer, loadSea]);
+    if (seaRefreshDue(seaLoaded, { ...clock, now: Date.now(), serverNow })) {
+      // One too old to show is not on the map, so the visitor is told it is loading.
+      void loadSea(seaLayer, !seaTooOld(seaLoaded, serverNow));
+    }
+  }, [now, seaLayer, seaLoaded, serverNow, loadSea]);
 
   /** The figures of a forecast at one spot, in words. */
   const describeSea = (sample: SeaSample, forecast: SeaForecast) => {
