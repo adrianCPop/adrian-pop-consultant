@@ -18,16 +18,12 @@ import {
   Wind,
   X,
 } from "lucide-react";
+import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import {
-  compassPoint,
-  distanceNm,
-  formatCoord,
-  rhumbPathLengthNm,
-  type LatLon,
-} from "@/lib/geo";
+import { distanceNm, rhumbPathLengthNm, type LatLon } from "@/lib/geo";
+import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import {
   fetchVoyage,
   photoUrl,
@@ -54,38 +50,6 @@ const AHEAD_MAX_AGE_MS = 12 * 3_600_000;
 /** Closer to the plan than this counts as being on it: the figures are not finer than that. */
 const ON_COURSE_DEG = 3;
 const ON_ROUTE_NM = 2;
-
-const formatUtc = (time: number | string, options: Intl.DateTimeFormatOptions) =>
-  new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", ...options }).format(new Date(time));
-
-const dayMonth = (time: number | string) => formatUtc(time, { day: "numeric", month: "short" });
-const fullDate = (time: number | string) =>
-  formatUtc(time, { day: "numeric", month: "long", year: "numeric" });
-const clock = (time: number | string) =>
-  `${formatUtc(time, { hour: "2-digit", minute: "2-digit" })} UTC`;
-const nm = (value: number) => Math.round(value).toLocaleString("en-US");
-
-const formatSpan = (ms: number) => {
-  const minutes = Math.max(0, Math.round(ms / 60_000));
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) {
-    const rest = minutes % 60;
-    return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-  }
-  return `${Math.floor(hours / 24)} days`;
-};
-
-const formatDuration = (hours: number) => {
-  const days = Math.floor(hours / 24);
-  const rest = Math.floor(hours - days * 24);
-  return rest === 0 ? `${days} d` : `${days} d ${rest} h`;
-};
-
-const one = (value: number | null, unit: string) =>
-  value === null ? "No data" : `${value.toFixed(1)} ${unit}`;
 
 interface StatTileProps {
   icon: ReactNode;
@@ -137,44 +101,59 @@ interface WeatherPanelProps {
 }
 
 const WeatherPanel = ({ weather, title, caption, ashore = false }: WeatherPanelProps) => {
+  const { t, rich, number, compass } = useVoyageTexts();
+  const wholeKnots = (value: number) => t("unit.knots", { value: number(value) });
+  const noData = t("common.noData");
   const rows = [
     {
       key: "wind",
       missing: weather.wind_kn === null,
       icon: <Wind className="h-4 w-4" />,
-      label: "Wind",
+      label: t("public.weather.wind"),
       value:
         weather.wind_kn === null
-          ? "No data"
-          : `${weather.wind_dir_deg === null ? "" : `${compassPoint(weather.wind_dir_deg)} `}${Math.round(weather.wind_kn)} kn`,
-      detail: weather.gust_kn === null ? "" : `Gusts ${Math.round(weather.gust_kn)} kn`,
+          ? noData
+          : weather.wind_dir_deg === null
+            ? wholeKnots(weather.wind_kn)
+            : t("public.weather.windFrom", {
+                direction: compass(weather.wind_dir_deg),
+                speed: wholeKnots(weather.wind_kn),
+              }),
+      detail:
+        weather.gust_kn === null
+          ? ""
+          : t("public.weather.gusts", { speed: wholeKnots(weather.gust_kn) }),
     },
     {
       key: "waves",
       missing: weather.wave_m === null,
       icon: <Waves className="h-4 w-4" />,
-      label: "Waves",
-      value: one(weather.wave_m, "m"),
+      label: t("public.weather.waves"),
+      value:
+        weather.wave_m === null ? noData : t("unit.metres", { value: number(weather.wave_m, 1) }),
       detail:
         weather.wave_dir_deg === null || weather.wave_period_s === null
           ? ""
-          : `From the ${compassPoint(weather.wave_dir_deg)}, ${Math.round(weather.wave_period_s)} s apart`,
+          : t("public.weather.wavesDetail", {
+              direction: compass(weather.wave_dir_deg),
+              seconds: Math.round(weather.wave_period_s),
+            }),
     },
     {
       key: "air",
       missing: weather.air_c === null,
       icon: <Thermometer className="h-4 w-4" />,
-      label: "Air",
-      value: weather.air_c === null ? "No data" : `${Math.round(weather.air_c)} °C`,
-      detail: ashore ? "Two metres above the ground" : "Two metres above the sea",
+      label: t("public.weather.air"),
+      value: weather.air_c === null ? noData : t("unit.celsius", { value: number(weather.air_c) }),
+      detail: ashore ? t("public.weather.airAshore") : t("public.weather.airAtSea"),
     },
     {
       key: "water",
       missing: weather.sea_c === null,
       icon: <Thermometer className="h-4 w-4" />,
-      label: "Water",
-      value: weather.sea_c === null ? "No data" : `${Math.round(weather.sea_c)} °C`,
-      detail: "Sea surface",
+      label: t("public.weather.water"),
+      value: weather.sea_c === null ? noData : t("unit.celsius", { value: number(weather.sea_c) }),
+      detail: t("public.weather.seaSurface"),
     },
   ].filter((row) => !(ashore && row.missing));
 
@@ -195,19 +174,21 @@ const WeatherPanel = ({ weather, title, caption, ashore = false }: WeatherPanelP
           ))}
         </div>
       ) : (
-        <p className="mt-5 text-sm text-muted-foreground">No forecast for this spot right now.</p>
+        <p className="mt-5 text-sm text-muted-foreground">{t("public.weather.none")}</p>
       )}
       <p className="mt-4 text-[0.68rem] text-muted-foreground">
-        Weather data by{" "}
-        <a
-          href="https://open-meteo.com/"
-          target="_blank"
-          rel="noreferrer"
-          className="underline hover:text-foreground"
-        >
-          Open-Meteo
-        </a>
-        .
+        {rich("public.weather.credit", {
+          source: (
+            <a
+              href="https://open-meteo.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-foreground"
+            >
+              Open-Meteo
+            </a>
+          ),
+        })}
       </p>
     </div>
   );
@@ -220,6 +201,8 @@ interface Loaded {
 }
 
 const VoyagePage = () => {
+  const texts = useVoyageTexts();
+  const { t, rich, dayMonth, fullDate, clock, miles, knots, compass, coord } = texts;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -362,7 +345,7 @@ const VoyagePage = () => {
               {
                 id: entry.id,
                 label: String(entryNumbers.get(entry.id)),
-                title: entry.title || "Log entry",
+                title: entry.title || t("common.logEntry"),
                 pos,
                 // Just below the port's own dot, clear of an entry written right there.
                 // On a round trip both ports are one place: the second pin goes beside the first.
@@ -376,7 +359,7 @@ const VoyagePage = () => {
               },
             ];
       }),
-    [entries, entryNumbers, boatEntryId, ashore, voyage, sameOriginAndDestination]
+    [entries, entryNumbers, boatEntryId, ashore, voyage, sameOriginAndDestination, t]
   );
 
   // The boat's course set against the planned route, while it is under way.
@@ -403,10 +386,10 @@ const VoyagePage = () => {
     [underWay, stats, course]
   );
   const whyNoCourse = !positionIsRecent
-    ? "Last position is old"
+    ? t("public.course.old")
     : stats?.speedKn != null && stats.speedKn < MIN_SPEED_KN
-      ? "Hardly moving"
-      : "Not known yet";
+      ? t("public.course.stopped")
+      : t("public.course.unknown");
 
   const entriesNewestFirst = useMemo(() => [...entries].reverse(), [entries]);
   const selectedEntry = entries.find((entry) => entry.id === selectedId) ?? null;
@@ -447,13 +430,17 @@ const VoyagePage = () => {
   const dayLabel = (entry: VoyageEntry) => {
     const time = Date.parse(entry.time);
     if (departure === null || time < departure) {
-      return "Before departure";
+      return t("public.entry.beforeDeparture");
     }
     if (arrival !== null && time > arrival) {
-      return "After landfall";
+      return t("public.entry.afterLandfall");
     }
-    return `Day ${Math.floor((time - departure) / DAY_MS) + 1}`;
+    return t("common.day", { day: Math.floor((time - departure) / DAY_MS) + 1 });
   };
+
+  /** A port's name in the page's language, when the shore contact gave one. */
+  const portName = (port: VoyagePort | undefined) =>
+    port ? texts.own(port.name, port.name_ro) : "";
 
   const showOnMap = (id: string) => {
     setSelectedId(id);
@@ -537,43 +524,55 @@ const VoyagePage = () => {
 
   if (!data) {
     return (
-      <div className="mx-auto flex min-h-[50vh] w-full max-w-6xl flex-col items-center justify-center gap-4 px-4 py-16 text-center">
-        {failed ? (
-          <>
-            <p className="font-heading text-lg font-semibold text-foreground">
-              The voyage page could not be loaded
+      <div lang={texts.htmlLang} className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="flex justify-end">
+          <VoyageLanguageSwitch />
+        </div>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 py-10 text-center">
+          {failed ? (
+            <>
+              <p className="font-heading text-lg font-semibold text-foreground">
+                {t("public.loadFailed.title")}
+              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {t("public.loadFailed.body")}
+              </p>
+              <Button variant="outline" className="rounded-xl" onClick={() => void load()}>
+                {t("public.tryAgain")}
+              </Button>
+            </>
+          ) : (
+            <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t("public.loading")}
             </p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              This is a problem with the website, not with the boat. Please try again in a moment.
-            </p>
-            <Button variant="outline" className="rounded-xl" onClick={() => void load()}>
-              Try again
-            </Button>
-          </>
-        ) : (
-          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading the latest position
-          </p>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   if (!voyage) {
     return (
-      <div className="mx-auto flex min-h-[50vh] w-full max-w-6xl flex-col items-center justify-center gap-3 px-4 py-16 text-center">
-        <Sailboat className="h-8 w-8 text-primary" />
-        <p className="font-heading text-xl font-semibold text-foreground">
-          The crossing has not been announced yet
-        </p>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          The route, the departure date and the live position will appear here.
-        </p>
+      <div lang={texts.htmlLang} className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="flex justify-end">
+          <VoyageLanguageSwitch />
+        </div>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 py-10 text-center">
+          <Sailboat className="h-8 w-8 text-primary" />
+          <p className="font-heading text-xl font-semibold text-foreground">
+            {t("public.notAnnounced.title")}
+          </p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {t("public.notAnnounced.body")}
+          </p>
+        </div>
       </div>
     );
   }
 
+  const originName = portName(voyage.origin);
+  const destinationName = portName(voyage.destination);
   const origin: LatLon = [voyage.origin.lat, voyage.origin.lon];
   const sinceFix = stats ? serverNow - stats.positionTime : null;
   const quiet = sinceFix !== null && sinceFix > QUIET_MS;
@@ -597,31 +596,44 @@ const VoyagePage = () => {
     JSON.stringify([voyage.origin, voyage.destination, voyage.departure, voyage.arrived_at]),
     // The course ahead disappears once the last position has grown old.
     ahead.length,
+    // The map writes a few words of its own.
+    texts.language,
   ].join(":");
 
   let statusLine: ReactNode;
   if (status === "planned") {
     statusLine = departure ? (
       <>
-        <span className="font-semibold text-foreground">Leaving {fullDate(departure)}</span>
+        <span className="font-semibold text-foreground">
+          {t("public.status.leaving", { date: fullDate(departure) })}
+        </span>
         <span aria-hidden="true">·</span>
         <span>
-          {clock(departure)} · in {formatSpan(departure - serverNow)}
+          {t("public.status.leavingAt", {
+            time: clock(departure),
+            span: texts.span(departure - serverNow),
+          })}
         </span>
       </>
     ) : (
-      <span className="font-semibold text-foreground">Departure date to be confirmed</span>
+      <span className="font-semibold text-foreground">{t("public.status.departureOpen")}</span>
     );
   } else if (status === "arrived") {
     statusLine = (
       <>
         <span className="font-semibold text-foreground">
-          Arrived{arrival ? ` ${fullDate(arrival)}` : ""}
+          {arrival
+            ? t("public.status.arrivedOn", { date: fullDate(arrival) })
+            : t("public.status.arrived")}
         </span>
         {departure && arrival ? (
           <>
             <span aria-hidden="true">·</span>
-            <span>{formatDuration((arrival - departure) / 3_600_000)} at sea</span>
+            <span>
+              {t("public.status.atSea", {
+                duration: texts.durationLong((arrival - departure) / 3_600_000),
+              })}
+            </span>
           </>
         ) : null}
       </>
@@ -629,33 +641,39 @@ const VoyagePage = () => {
   } else {
     statusLine = (
       <>
-        <span className="font-semibold text-foreground">Under way</span>
+        <span className="font-semibold text-foreground">{t("public.status.underWay")}</span>
         {departure ? (
           <>
             <span aria-hidden="true">·</span>
-            <span>Day {Math.floor((serverNow - departure) / DAY_MS) + 1}</span>
+            <span>{t("common.day", { day: Math.floor((serverNow - departure) / DAY_MS) + 1 })}</span>
           </>
         ) : null}
         <span aria-hidden="true">·</span>
         <span>
           {sinceFix === null
-            ? "waiting for the first position"
-            : `last position ${formatSpan(sinceFix)} ago`}
+            ? t("public.status.waiting")
+            : t("public.status.lastPosition", { span: texts.span(sinceFix) })}
         </span>
       </>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+    <div
+      lang={texts.htmlLang}
+      className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8"
+    >
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-          {voyage.eyebrow || "Atlantic crossing"}
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <p className="pt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+            {texts.own(voyage.eyebrow, voyage.eyebrow_ro) || t("public.eyebrow")}
+          </p>
+          <VoyageLanguageSwitch />
+        </div>
         <h1 className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-heading text-3xl font-semibold leading-tight sm:text-4xl">
-          {voyage.origin.name}
-          <ArrowRight className="h-6 w-6 text-primary sm:h-7 sm:w-7" aria-label="to" />
-          {voyage.destination.name}
+          {originName}
+          <ArrowRight className="h-6 w-6 text-primary sm:h-7 sm:w-7" aria-label={t("public.to")} />
+          {destinationName}
         </h1>
         <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
           {status === "under_way" ? (
@@ -677,7 +695,7 @@ const VoyagePage = () => {
 
       <section
         ref={mapSectionRef}
-        aria-label="Map"
+        aria-label={t("public.map.label")}
         className="relative isolate mt-7 h-[400px] overflow-hidden rounded-2xl border border-border/80 shadow-soft sm:h-[480px] lg:h-[540px]"
       >
         <VoyageMap
@@ -687,8 +705,15 @@ const VoyagePage = () => {
           current={stats?.position ?? null}
           headingDeg={stats?.courseDeg ?? null}
           ahead={ahead}
-          from={{ name: voyage.origin.name, pos: origin }}
-          to={{ name: voyage.destination.name, pos: destination as LatLon }}
+          from={{ name: originName, pos: origin }}
+          to={{ name: destinationName, pos: destination as LatLon }}
+          text={{
+            description: t("public.map.description"),
+            latestPosition: t("public.map.latestPosition"),
+            zoomIn: t("public.map.zoomIn"),
+            zoomOut: t("public.map.zoomOut"),
+            west: texts.point("W"),
+          }}
           pins={pins}
           boatEntryId={boatEntryId}
           selectedId={selectedId}
@@ -701,14 +726,14 @@ const VoyagePage = () => {
         {stats ? (
           <div className="pointer-events-none absolute left-3 top-3 z-[1001] rounded-xl border border-border/70 bg-background/85 px-4 py-3 backdrop-blur-md">
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {status === "arrived" ? "Final position" : "Last position"}
+              {status === "arrived" ? t("public.map.finalPosition") : t("public.map.lastPosition")}
             </p>
             <p className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground sm:text-lg">
-              {formatCoord(stats.position)}
+              {coord(stats.position)}
             </p>
             <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
               {stats.courseDeg !== null && stats.speedKn !== null && status !== "arrived"
-                ? `${Math.round(stats.courseDeg)}° ${compassPoint(stats.courseDeg)} · ${stats.speedKn.toFixed(1)} kn · `
+                ? `${Math.round(stats.courseDeg)}° ${compass(stats.courseDeg)} · ${knots(stats.speedKn)} · `
                 : ""}
               {dayMonth(stats.positionTime)}, {clock(stats.positionTime)}
             </p>
@@ -718,21 +743,21 @@ const VoyagePage = () => {
         <ul className="pointer-events-none absolute right-3 top-3 z-[1001] hidden space-y-1.5 rounded-xl border border-border/70 bg-background/85 px-4 py-3 text-xs text-muted-foreground backdrop-blur-md sm:block">
           <li className="flex items-center gap-2.5">
             <span className="h-0.5 w-6 rounded-full bg-primary" />
-            Sailed
+            {t("public.map.sailed")}
           </li>
           <li className="flex items-center gap-2.5">
             <span className="w-6 border-t border-dashed border-slate-300/70" />
-            Planned
+            {t("public.map.planned")}
           </li>
           {ahead.length > 0 ? (
             <li className="flex items-center gap-2.5">
               <span className="h-0.5 w-6 rounded-full bg-[hsl(38_95%_62%)]" />
-              Course ahead
+              {t("public.map.courseAhead")}
             </li>
           ) : null}
           <li className="flex items-center gap-2.5">
             <span className="ml-1.5 mr-1.5 h-3 w-3 rounded-full border-2 border-primary" />
-            Log entry
+            {t("common.logEntry")}
           </li>
         </ul>
 
@@ -750,7 +775,7 @@ const VoyagePage = () => {
                 {dayLabel(selectedEntry)} · {dayMonth(selectedEntry.time)}
               </p>
               <p className="mt-0.5 truncate font-heading text-sm font-semibold text-foreground">
-                {selectedEntry.title || "Log entry"}
+                {selectedEntry.title || t("common.logEntry")}
               </p>
               <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                 {selectedEntry.body}
@@ -762,14 +787,14 @@ const VoyagePage = () => {
                   className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                 >
                   <Maximize2 className="h-3 w-3" />
-                  Open
+                  {t("public.map.open")}
                 </button>
                 <button
                   type="button"
                   onClick={() => readEntry(selectedEntry.id)}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                 >
-                  In the logbook
+                  {t("public.map.inLogbook")}
                   <ArrowDown className="h-3 w-3" />
                 </button>
               </div>
@@ -777,7 +802,7 @@ const VoyagePage = () => {
             <button
               type="button"
               onClick={() => setSelectedId(null)}
-              aria-label="Close"
+              aria-label={t("common.close")}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               <X className="h-4 w-4" />
@@ -790,20 +815,22 @@ const VoyagePage = () => {
             className="absolute bottom-8 left-3 z-[1001] inline-flex items-center gap-2 rounded-xl border border-border/80 bg-background/85 px-3 py-2 text-xs font-semibold text-muted-foreground backdrop-blur-md transition-colors hover:text-foreground sm:bottom-3"
           >
             <Maximize2 className="h-3.5 w-3.5" />
-            Whole route
+            {t("public.map.wholeRoute")}
           </button>
         )}
       </section>
 
       {stats ? (
         <>
-          <section aria-label="Progress" className="panel-soft mt-5 rounded-2xl px-5 py-5 sm:px-6">
+          <section aria-label={t("public.progress.label")} className="panel-soft mt-5 rounded-2xl px-5 py-5 sm:px-6">
             <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-semibold text-foreground">{voyage.origin.name}</span>
+              <span className="font-semibold text-foreground">{originName}</span>
               <span className="font-heading text-sm font-semibold text-primary">
-                {status === "arrived" ? "Arrived" : `${progressPercent}% of the way`}
+                {status === "arrived"
+                  ? t("public.status.arrived")
+                  : t("public.progress.ofTheWay", { percent: progressPercent })}
               </span>
-              <span className="font-semibold text-foreground">{voyage.destination.name}</span>
+              <span className="font-semibold text-foreground">{destinationName}</span>
             </div>
             <div
               className="relative mt-3 h-2 rounded-full bg-secondary"
@@ -811,7 +838,7 @@ const VoyagePage = () => {
               aria-valuenow={progressPercent}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="Share of the crossing completed"
+              aria-label={t("public.progress.bar")}
             >
               <div
                 className="absolute inset-y-0 left-0 rounded-full bg-primary"
@@ -824,12 +851,19 @@ const VoyagePage = () => {
             </div>
             <div className="mt-3 flex justify-between gap-3 text-xs tabular-nums text-muted-foreground">
               <span>
-                <span className="font-semibold text-foreground">{nm(stats.sailedNm)} nm</span> sailed
+                {rich("public.progress.sailed", {
+                  distance: (
+                    <span className="font-semibold text-foreground">{miles(stats.sailedNm)}</span>
+                  ),
+                })}
               </span>
               {landed ? null : (
                 <span>
-                  <span className="font-semibold text-foreground">{nm(stats.toGoNm)} nm</span> to
-                  go
+                  {rich("public.progress.toGo", {
+                    distance: (
+                      <span className="font-semibold text-foreground">{miles(stats.toGoNm)}</span>
+                    ),
+                  })}
                 </span>
               )}
             </div>
@@ -839,92 +873,105 @@ const VoyagePage = () => {
                 <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-3">
                   <div>
                     <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      Course now
+                      {t("public.course.now")}
                     </dt>
                     <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
                       {course === null
                         ? whyNoCourse
-                        : `${Math.round(course)}° ${compassPoint(course)}`}
+                        : `${Math.round(course)}° ${compass(course)}`}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      Planned route here
+                      {t("public.course.planned")}
                     </dt>
                     <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
-                      {Math.round(plan.plannedDeg)}° {compassPoint(plan.plannedDeg)}
+                      {Math.round(plan.plannedDeg)}° {compass(plan.plannedDeg)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      Against the plan
+                      {t("public.course.against")}
                     </dt>
                     <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
                       {plan.turnDeg === null
-                        ? "No course to compare"
+                        ? t("public.course.none")
                         : Math.abs(plan.turnDeg) < ON_COURSE_DEG
-                          ? "On the planned course"
-                          : `${Math.abs(plan.turnDeg)}° to the ${plan.turnDeg < 0 ? "left" : "right"}`}
+                          ? t("public.course.onCourse")
+                          : t(plan.turnDeg < 0 ? "public.course.left" : "public.course.right", {
+                              degrees: Math.abs(plan.turnDeg),
+                            })}
                     </dd>
                     <dd className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                       {plan.offRouteNm < ON_ROUTE_NM
-                        ? "On the planned route"
-                        : `${nm(plan.offRouteNm)} nm ${plan.side} of the planned route`}
+                        ? t("public.course.onRoute")
+                        : t("public.course.offRoute", {
+                            distance: miles(plan.offRouteNm),
+                            side: texts.point(plan.side),
+                          })}
                     </dd>
                   </div>
                 </dl>
                 {ahead.length > 0 ? (
                   <p className="mt-3 text-[0.68rem] text-muted-foreground">
-                    The orange line on the map is where this course leads over the next{" "}
-                    {AHEAD_HOURS[AHEAD_HOURS.length - 1]} hours at the present speed, with a dot
-                    for each day.
+                    {t("public.course.aheadNote", { count: AHEAD_HOURS[AHEAD_HOURS.length - 1] })}
                   </p>
                 ) : null}
               </div>
             ) : null}
           </section>
 
-          <section aria-label="Key figures" className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <section aria-label={t("public.figures.label")} className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatTile
               icon={<Gauge className="h-4 w-4" />}
-              label="Average speed"
-              value={stats.averageKn === null ? "No data yet" : `${stats.averageKn.toFixed(1)} kn`}
-              hint="Since departure"
+              label={t("public.figures.averageSpeed")}
+              value={stats.averageKn === null ? t("common.noDataYet") : knots(stats.averageKn)}
+              hint={t("public.figures.sinceDeparture")}
             />
             <StatTile
               icon={<Trophy className="h-4 w-4" />}
-              label="Best 24 hours"
-              value={stats.bestRun ? `${nm(stats.bestRun.nm)} nm` : "No data yet"}
-              hint={stats.bestRun ? `Day ${stats.bestRun.day}` : "After the first full day"}
+              label={t("public.figures.best24")}
+              value={stats.bestRun ? miles(stats.bestRun.nm) : t("common.noDataYet")}
+              hint={
+                stats.bestRun
+                  ? t("common.day", { day: stats.bestRun.day })
+                  : t("public.figures.afterFirstDay")
+              }
             />
             <StatTile
               icon={<Timer className="h-4 w-4" />}
-              label="Time at sea"
-              value={formatDuration(stats.elapsedHours)}
-              hint={departure ? `Left ${dayMonth(departure)}, ${clock(departure)}` : ""}
+              label={t("public.figures.timeAtSea")}
+              value={texts.duration(stats.elapsedHours)}
+              hint={
+                departure
+                  ? t("public.figures.left", { date: dayMonth(departure), time: clock(departure) })
+                  : ""
+              }
             />
             {status === "arrived" ? (
               <StatTile
                 icon={<CalendarClock className="h-4 w-4" />}
-                label="Landfall"
-                value={arrival ? dayMonth(arrival) : "Arrived"}
+                label={t("public.figures.landfall")}
+                value={arrival ? dayMonth(arrival) : t("public.status.arrived")}
                 hint={arrival ? clock(arrival) : ""}
               />
             ) : (
               <StatTile
                 icon={<CalendarClock className="h-4 w-4" />}
-                label="Estimated arrival"
-                value={stats.eta ? dayMonth(stats.eta) : "No data yet"}
-                hint="At the average speed so far"
+                label={t("public.figures.eta")}
+                value={stats.eta ? dayMonth(stats.eta) : t("common.noDataYet")}
+                hint={t("public.figures.etaHint")}
               />
             )}
           </section>
 
           <section className={cn("mt-4 grid gap-4", weather && "lg:grid-cols-[1.45fr_1fr]")}>
             <div className="panel-soft rounded-2xl p-5 sm:p-6">
-              <h2 className="font-heading text-base font-semibold text-foreground">Daily runs</h2>
+              <h2 className="font-heading text-base font-semibold text-foreground">
+                {t("public.runs.title")}
+              </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Nautical miles sailed in each 24 hours since departure.
+                {t("public.runs.caption")}
               </p>
               <div className={cn("mt-5 flex h-40 items-end", manyRuns ? "gap-1" : "gap-2 sm:gap-3")}>
                 {stats.dailyRuns.map((run) => {
@@ -933,7 +980,10 @@ const VoyagePage = () => {
                   return (
                     <div
                       key={run.day}
-                      title={`Day ${run.day}: ${nm(run.nm)} nm${run.complete ? "" : " so far"}`}
+                      title={t(run.complete ? "public.runs.bar" : "public.runs.barSoFar", {
+                        day: run.day,
+                        distance: miles(run.nm),
+                      })}
                       className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
                     >
                       <span
@@ -943,7 +993,7 @@ const VoyagePage = () => {
                           manyRuns && "hidden md:inline"
                         )}
                       >
-                        {nm(run.nm)}
+                        {texts.number(run.nm)}
                       </span>
                       <div
                         className={cn(
@@ -961,58 +1011,59 @@ const VoyagePage = () => {
                 })}
               </div>
               <p className="mt-2 text-center text-[0.68rem] text-muted-foreground">
-                Day of the crossing. The last bar is still in progress.
+                {t("public.runs.axis")}
               </p>
             </div>
 
             {weather ? (
               <WeatherPanel
                 weather={weather}
-                title="Weather at the boat"
-                caption="Forecast for the last position, not measured on board."
+                title={t("public.weather.atBoat")}
+                caption={t("public.weather.atBoatCaption")}
               />
             ) : null}
           </section>
         </>
       ) : status === "under_way" ? (
         <p className="panel-soft mt-5 rounded-2xl px-5 py-5 text-sm text-muted-foreground sm:px-6">
-          No position has arrived yet. The track and the figures appear with the first one.
+          {t("public.noPosition")}
         </p>
       ) : status === "planned" ? (
         <section
-          aria-label="The plan"
+          aria-label={t("public.plan.title")}
           className={cn("mt-5 grid gap-4", weather && "lg:grid-cols-[1.45fr_1fr]")}
         >
           <div className="panel-soft rounded-2xl p-5 sm:p-6">
-            <h2 className="font-heading text-base font-semibold text-foreground">The plan</h2>
+            <h2 className="font-heading text-base font-semibold text-foreground">
+              {t("public.plan.title")}
+            </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              The distance sailed, the speed and the daily runs appear here once the boat is
-              under way.
+              {t("public.plan.caption")}
             </p>
             <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
               {/* Nothing to say for a route that is a single place, such as a round trip with no waypoints yet. */}
               {plannedNm >= 1 ? (
                 <div>
                   <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Planned route
+                    {t("public.plan.route")}
                   </dt>
                   <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
-                    {nm(plannedNm)} nm
+                    {miles(plannedNm)}
                   </dd>
                   <dd className="mt-1 text-xs text-muted-foreground">
-                    Along the dashed line on the map
+                    {t("public.plan.routeHint")}
                   </dd>
                 </div>
               ) : null}
               <div>
                 <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Departure
+                  {t("public.plan.departure")}
                 </dt>
                 <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
-                  {departure ? dayMonth(departure) : "Not set yet"}
+                  {departure ? dayMonth(departure) : t("public.plan.notSet")}
                 </dd>
                 <dd className="mt-1 text-xs text-muted-foreground">
-                  {departure ? clock(departure) : `From ${voyage.origin.name}`}
+                  {departure ? clock(departure) : t("public.plan.from", { port: originName })}
                 </dd>
               </div>
             </dl>
@@ -1021,11 +1072,11 @@ const VoyagePage = () => {
           {weather ? (
             <WeatherPanel
               weather={weather}
-              title={`Weather at ${voyage.origin.name}`}
+              title={t("public.weather.atPort", { port: originName })}
               caption={
                 forecastTime === null
-                  ? "Forecast for the port of departure."
-                  : `Forecast for the port of departure, for ${clock(forecastTime)}.`
+                  ? t("public.weather.portCaption")
+                  : t("public.weather.portCaptionAt", { time: clock(forecastTime) })
               }
               ashore
             />
@@ -1038,22 +1089,22 @@ const VoyagePage = () => {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                Logbook
+                {t("public.logbook.eyebrow")}
               </p>
               <h2 className="mt-2 font-heading text-2xl font-semibold text-foreground sm:text-3xl">
-                Notes from on board
+                {t("public.logbook.title")}
               </h2>
             </div>
             {entries.length > 0 ? (
               <p className="pb-1 text-xs text-muted-foreground">
-                {entries.length} {entries.length === 1 ? "entry" : "entries, newest first"}
+                {t("public.logbook.count", { count: entries.length })}
               </p>
             ) : null}
           </div>
 
           {entries.length === 0 ? (
             <p className="panel-soft mt-6 rounded-2xl p-5 text-sm text-muted-foreground sm:p-6">
-              Nothing in the logbook yet. Entries and photos from the crew will appear here.
+              {t("public.logbook.empty")}
             </p>
           ) : (
             <ol className="mt-6 space-y-4">
@@ -1063,7 +1114,7 @@ const VoyagePage = () => {
                     id={`entry-${entry.id}`}
                     tabIndex={-1}
                     className={cn(
-                      "panel-soft scroll-mt-28 rounded-2xl p-5 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-6",
+                      "panel-soft scroll-mt-6 rounded-2xl p-5 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-6",
                       selectedId === entry.id && "ring-1 ring-primary/70"
                     )}
                   >
@@ -1075,9 +1126,9 @@ const VoyagePage = () => {
                         {dayMonth(entry.time)}, {clock(entry.time)}
                       </span>
                       {entry.pos ? (
-                        <span className="tabular-nums">{formatCoord(entry.pos)}</span>
+                        <span className="tabular-nums">{coord(entry.pos)}</span>
                       ) : ashore.port.has(entry.id) ? (
-                        <span>{ashore.port.get(entry.id)?.name}</span>
+                        <span>{portName(ashore.port.get(entry.id))}</span>
                       ) : null}
                     </div>
 
@@ -1099,7 +1150,10 @@ const VoyagePage = () => {
                             key={photo.id}
                             type="button"
                             onClick={() => setLightbox({ photo, entry })}
-                            aria-label={`Open photo ${index + 1} of ${entry.photos.length}`}
+                            aria-label={t("public.entry.openPhoto", {
+                              index: index + 1,
+                              total: entry.photos.length,
+                            })}
                             className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-border/70 bg-secondary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <img
@@ -1114,11 +1168,13 @@ const VoyagePage = () => {
                     ) : null}
 
                     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
-                      {entry.author ? <span>Written by {entry.author}</span> : null}
+                      {entry.author ? (
+                        <span>{t("public.entry.writtenBy", { author: entry.author })}</span>
+                      ) : null}
                       {entry.photos.length > 0 ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Camera className="h-3.5 w-3.5 text-primary" />
-                          {entry.photos.length} {entry.photos.length === 1 ? "photo" : "photos"}
+                          {t("common.photos", { count: entry.photos.length })}
                         </span>
                       ) : null}
                       {entry.pos || ashore.pinned.has(entry.id) ? (
@@ -1128,7 +1184,7 @@ const VoyagePage = () => {
                           className="ml-auto inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
                         >
                           <MapPin className="h-3.5 w-3.5" />
-                          Show on map
+                          {t("public.entry.showOnMap")}
                         </button>
                       ) : null}
                     </div>
@@ -1139,21 +1195,19 @@ const VoyagePage = () => {
           )}
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <div className="panel-soft rounded-2xl p-5 sm:p-6">
             <div className="flex items-center gap-2.5">
               <LifeBuoy className="h-5 w-5 text-primary" />
               <h2 className="font-heading text-base font-semibold text-foreground">
-                If the dot stops moving
+                {t("public.quiet.title")}
               </h2>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Positions arrive when the satellite dish on board is switched on. A gap of a day or
-              more is normal and almost always means the dish is off, or the phone that records the
-              track needs a restart.
+              {t("public.quiet.body")}
             </p>
             <p className="mt-2 text-sm font-semibold leading-relaxed text-foreground">
-              A quiet map is not a distress signal.
+              {t("public.quiet.strong")}
             </p>
           </div>
 
@@ -1161,7 +1215,9 @@ const VoyagePage = () => {
             <div className="panel-soft rounded-2xl p-5 sm:p-6">
               <div className="flex items-center gap-2.5">
                 <Sailboat className="h-5 w-5 text-primary" />
-                <h2 className="font-heading text-base font-semibold text-foreground">The boat</h2>
+                <h2 className="font-heading text-base font-semibold text-foreground">
+                  {t("public.boat")}
+                </h2>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 {voyage.boat_name}
@@ -1173,6 +1229,8 @@ const VoyagePage = () => {
 
       <Dialog open={openedEntry !== null} onOpenChange={(open) => !open && setOpened(null)}>
         <DialogContent
+          lang={texts.htmlLang}
+          closeLabel={t("common.close")}
           className="flex max-h-[88vh] max-w-2xl flex-col gap-0 overflow-hidden border-border/80 bg-card p-0 focus:outline-none [&>button]:rounded-full [&>button]:bg-background/80 [&>button]:p-1.5 [&>button]:opacity-100 [&>button]:backdrop-blur-sm"
           onOpenAutoFocus={(event) => {
             // Focus the scrolling part rather than the first button (a photo thumbnail),
@@ -1249,7 +1307,10 @@ const VoyagePage = () => {
                             key={photo.id}
                             type="button"
                             onClick={() => openedEntry && setOpened({ id: openedEntry.id, photo: index })}
-                            aria-label={`Show photo ${index + 1} of ${shown.entry.photos.length}`}
+                            aria-label={t("public.entry.showPhoto", {
+                              index: index + 1,
+                              total: shown.entry.photos.length,
+                            })}
                             aria-pressed={photo.id === shown.photo.id}
                             className={cn(
                               "h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -1285,16 +1346,19 @@ const VoyagePage = () => {
                       {dayMonth(shown.entry.time)}, {clock(shown.entry.time)}
                     </span>
                     {shown.entry.pos ? (
-                      <span className="tabular-nums">{formatCoord(shown.entry.pos)}</span>
+                      <span className="tabular-nums">{coord(shown.entry.pos)}</span>
                     ) : ashore.port.has(shown.entry.id) ? (
-                      <span>{ashore.port.get(shown.entry.id)?.name}</span>
+                      <span>{portName(ashore.port.get(shown.entry.id))}</span>
                     ) : null}
                   </div>
                   <DialogTitle className="mt-3 break-words font-heading text-xl font-semibold leading-snug text-foreground">
-                    {shown.entry.title || "Log entry"}
+                    {shown.entry.title || t("common.logEntry")}
                   </DialogTitle>
                   <DialogDescription className="sr-only">
-                    Log entry of {dayMonth(shown.entry.time)}, {clock(shown.entry.time)}
+                    {t("public.entry.of", {
+                      date: dayMonth(shown.entry.time),
+                      time: clock(shown.entry.time),
+                    })}
                   </DialogDescription>
                   {shown.entry.body ? (
                     <p className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">
@@ -1303,12 +1367,13 @@ const VoyagePage = () => {
                   ) : null}
                   {shown.entry.author || shown.entry.photos.length > 0 ? (
                     <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      {shown.entry.author ? <span>Written by {shown.entry.author}</span> : null}
+                      {shown.entry.author ? (
+                        <span>{t("public.entry.writtenBy", { author: shown.entry.author })}</span>
+                      ) : null}
                       {shown.entry.photos.length > 0 ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Camera className="h-3.5 w-3.5 text-primary" />
-                          {shown.entry.photos.length}{" "}
-                          {shown.entry.photos.length === 1 ? "photo" : "photos"}
+                          {t("common.photos", { count: shown.entry.photos.length })}
                         </span>
                       ) : null}
                     </p>
@@ -1330,13 +1395,13 @@ const VoyagePage = () => {
                       )}
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
-                      Earlier
+                      {t("public.entry.earlier")}
                     </button>
                     {/* Read out whole on every step, with the title, which is not announced otherwise. */}
                     <span className="whitespace-nowrap tabular-nums" aria-live="polite" aria-atomic="true">
-                      <span className="sr-only">Entry </span>
-                      {shownIndex + 1} of {entries.length}
-                      <span className="sr-only">: {shown.entry.title || "Log entry"}</span>
+                      <span className="sr-only">{t("public.entry.counterLead")} </span>
+                      {t("public.entry.counter", { index: shownIndex + 1, total: entries.length })}
+                      <span className="sr-only">: {shown.entry.title || t("common.logEntry")}</span>
                     </span>
                     <button
                       type="button"
@@ -1347,7 +1412,7 @@ const VoyagePage = () => {
                         laterEntry ? "text-primary hover:underline" : "cursor-default opacity-40"
                       )}
                     >
-                      Later
+                      {t("public.entry.later")}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </button>
                   </>
@@ -1357,7 +1422,7 @@ const VoyagePage = () => {
                   onClick={() => closeAndReadInLogbook(shown.entry.id)}
                   className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-primary hover:underline"
                 >
-                  In the logbook
+                  {t("public.map.inLogbook")}
                   <ArrowDown className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -1367,7 +1432,11 @@ const VoyagePage = () => {
       </Dialog>
 
       <Dialog open={lightbox !== null} onOpenChange={(open) => !open && setLightbox(null)}>
-        <DialogContent className="max-w-4xl gap-0 overflow-hidden border-border/80 bg-card p-0">
+        <DialogContent
+          lang={texts.htmlLang}
+          closeLabel={t("common.close")}
+          className="max-w-4xl gap-0 overflow-hidden border-border/80 bg-card p-0"
+        >
           {lightbox ? (
             <>
               <img
@@ -1379,11 +1448,11 @@ const VoyagePage = () => {
               />
               <div className="px-5 py-4">
                 <DialogTitle className="font-heading text-base font-semibold">
-                  {lightbox.entry.title || "Photo from the log"}
+                  {lightbox.entry.title || t("public.entry.photoTitle")}
                 </DialogTitle>
                 <DialogDescription className="mt-1 text-xs tabular-nums">
                   {dayLabel(lightbox.entry)} · {dayMonth(lightbox.entry.time)}
-                  {lightbox.entry.pos ? ` · ${formatCoord(lightbox.entry.pos)}` : ""}
+                  {lightbox.entry.pos ? ` · ${coord(lightbox.entry.pos)}` : ""}
                 </DialogDescription>
               </div>
             </>

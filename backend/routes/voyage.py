@@ -591,6 +591,10 @@ def _weather_for(lat: float, lon: float) -> Optional[dict]:
 def _public_settings(main: dict) -> dict:
     return {
         "eyebrow": main.get("eyebrow", ""),
+        # The pages come in English and Romanian. The small heading and each port
+        # (`name_ro`, inside the port) can have a Romanian version; empty means
+        # the Romanian page shows the first one.
+        "eyebrow_ro": main.get("eyebrow_ro", ""),
         "boat_name": main.get("boat_name", ""),
         "origin": main["origin"],
         "destination": main["destination"],
@@ -824,18 +828,34 @@ async def admin_state(_: dict = Depends(require_admin), db=Depends(get_db)):
 
 class PortIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
+    # Not sent at all by an admin page loaded before the Romanian names existed:
+    # see _romanian below for what is stored then.
+    name_ro: Optional[str] = Field(None, max_length=60)
     lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
     lon: float = Field(ge=-180, le=180, allow_inf_nan=False)
 
 
 class SettingsIn(BaseModel):
     eyebrow: str = Field("", max_length=80)
+    eyebrow_ro: Optional[str] = Field(None, max_length=80)
     boat_name: str = Field("", max_length=80)
     origin: PortIn
     destination: PortIn
     departure: Optional[str] = Field(None, max_length=40)
     arrived_at: Optional[str] = Field(None, max_length=40)
     planned_route: List[Tuple[float, float]] = Field(default_factory=list, max_length=200)
+
+
+def _romanian(given: Optional[str], text: str, stored_text, stored_romanian) -> str:
+    """The Romanian version of a text to store with it.
+
+    The one the admin page sent, if it sent one (an empty one clears it). A page
+    that knows nothing of Romanian versions sends none: the stored one is kept
+    then, as long as the text it translates has not changed.
+    """
+    if given is not None:
+        return given.strip()
+    return (stored_romanian or "") if text == stored_text else ""
 
 
 def _optional_time(value: Optional[str], label: str) -> Optional[int]:
@@ -862,6 +882,16 @@ async def save_settings(payload: SettingsIn, _: dict = Depends(require_admin), d
         raise HTTPException(422, "A route point is outside the map")
     route = [[round(lat, 5), round(lon, 5)] for lat, lon in route]
     origin, destination = payload.origin.model_dump(), payload.destination.model_dump()
+    stored = await db.voyage_settings.find_one({"_id": "main"}) or {}
+    for port, which in ((origin, "origin"), (destination, "destination")):
+        port["name"] = port["name"].strip()
+        if not port["name"]:
+            raise HTTPException(422, "A port needs a name")
+        before = stored.get(which) or {}
+        port["name_ro"] = _romanian(
+            port["name_ro"], port["name"], before.get("name"), before.get("name_ro")
+        )
+    eyebrow = payload.eyebrow.strip()
     if len(route) < 2:
         route = [[origin["lat"], origin["lon"]], [destination["lat"], destination["lon"]]]
 
@@ -869,7 +899,10 @@ async def save_settings(payload: SettingsIn, _: dict = Depends(require_admin), d
         {"_id": "main"},
         {
             "$set": {
-                "eyebrow": payload.eyebrow.strip(),
+                "eyebrow": eyebrow,
+                "eyebrow_ro": _romanian(
+                    payload.eyebrow_ro, eyebrow, stored.get("eyebrow"), stored.get("eyebrow_ro")
+                ),
                 "boat_name": payload.boat_name.strip(),
                 "origin": origin,
                 "destination": destination,

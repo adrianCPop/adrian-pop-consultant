@@ -9,11 +9,32 @@ without a connection, and a small admin page for whoever is ashore.
 | `/voyage/log` | Crew | Write entries and add photos. Opened with a personal secret link, no sign-in. |
 | `/voyage/admin` | Shore contact | Voyage details, links, deleting, the pause switch. Behind one password. |
 
-None of them is linked from the site navigation.
+None of them is linked from the site navigation, and the site's own top bar is
+left off them (`frontend/src/components/site/SiteLayout.tsx`).
 
 Code: `backend/routes/voyage.py`, `backend/services/voyage_core.py`,
 `frontend/src/pages/site/Voyage*.tsx`, `frontend/src/lib/voyage*.ts`,
 `frontend/src/components/voyage/`, `frontend/public/voyage-*`.
+
+## English and Romanian
+
+All three pages come in both languages, with an EN / RO switch at the top.
+
+- A first visit follows the browser: the first of its languages that the page has,
+  else English. A choice made with the switch is remembered on that device.
+- Every text is in `frontend/src/lib/voyageMessages.ts`, once per language. Pages
+  get them through `useVoyageTexts()`, which also writes numbers, dates, compass
+  points and positions the way each language does (Romanian: `3.016`, `5,2`,
+  `20 nov.`, V for west, Mm for nautical miles, nd for knots).
+- The server answers in English. Its sentences are looked up in the same file
+  (`SERVER_TEXT_RO`); one that is missing there is shown in English. A test reads
+  the server's source and fails when a sentence has no Romanian text.
+- What people type is shown as typed: entries, names of crew. The exceptions are
+  the small heading and the two port names, which have an optional Romanian
+  version in the admin page. A save from an admin page that was loaded before
+  these existed leaves them as they are, unless it changes the text they translate.
+- To add a text: add the key to both languages in `voyageMessages.ts`, then use
+  `t("the.key")`. `cd frontend && npm test` checks that the two sets match.
 
 ## Going live
 
@@ -65,6 +86,8 @@ In `/voyage/admin`:
 
 1. **The voyage.** Fill in the ports, the departure date and time (UTC), the boat and
    the planned route, then save. Until this is saved the public page shows nothing.
+   The small heading and the port names can be given in Romanian as well; left
+   empty, the Romanian page shows the same text as the English one.
 2. **Links.** Make one link per person and one key for the tracking app. Each is
    shown once, with a QR code for people. Send every link privately: the link is the
    key, so whoever holds it can write as that person.
@@ -88,6 +111,10 @@ Notes:
   background.
 - Phones can attach their own GPS position (switch in the form). Laptops and most
   tablets cannot, so their entries are placed where the track says the boat was.
+- When a new version of the site is published, a device goes on opening the version
+  it has saved until it opens the log once on a connection quick enough to load the
+  new one (three seconds for the page). It never keeps half of each, so the log
+  opens with the dish off either way.
 
 ## The tracking phone
 

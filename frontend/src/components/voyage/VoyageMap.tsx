@@ -55,8 +55,28 @@ interface VoyageMapProps {
    */
   viewRef?: MutableRefObject<MapView | null>;
   onSelect: (id: string) => void;
+  /** The map's own words, in the page's language. English when left out. */
+  text?: Partial<MapText>;
   className?: string;
 }
+
+interface MapText {
+  /** What the map is, for someone who cannot see it. */
+  description: string;
+  latestPosition: string;
+  zoomIn: string;
+  zoomOut: string;
+  /** The letter for west on the grid: W, or V in Romanian. */
+  west: string;
+}
+
+const ENGLISH_TEXT: MapText = {
+  description: "Map of the crossing: planned route, track sailed so far and log entries",
+  latestPosition: "Latest position",
+  zoomIn: "Zoom in",
+  zoomOut: "Zoom out",
+  west: "W",
+};
 
 // Keyless dark basemap. Check Esri's terms for this site, or switch provider, before launch.
 const TILE_URL =
@@ -83,8 +103,10 @@ const VoyageMap = ({
   fitNonce,
   viewRef,
   onSelect,
+  text,
   className,
 }: VoyageMapProps) => {
+  const words = { ...ENGLISH_TEXT, ...text };
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const pinMarkersRef = useRef<Record<string, L.Marker>>({});
@@ -123,7 +145,9 @@ const VoyageMap = ({
     });
     mapRef.current = map;
     map.attributionControl.setPrefix(false);
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.control
+      .zoom({ position: "bottomright", zoomInTitle: words.zoomIn, zoomOutTitle: words.zoomOut })
+      .addTo(map);
     L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 16 }).addTo(map);
 
     // Latitude / longitude grid, for the chart feel on an otherwise empty ocean.
@@ -179,7 +203,7 @@ const VoyageMap = ({
           keyboard: false,
           icon: L.divIcon({
             className: "voyage-grat-label voyage-grat-label--lon",
-            html: `${Math.abs(lon)}°${lon > 0 ? "E" : "W"}`,
+            html: `${Math.abs(lon)}°${lon > 0 ? "E" : words.west}`,
             iconSize: [40, 14],
             iconAnchor: [-4, 20],
           }),
@@ -313,7 +337,7 @@ const VoyageMap = ({
               headingDeg
             )}deg)" aria-hidden="true"><path d="M12 2 19 21 12 17 5 21Z"/></svg>`;
       const boat = L.marker(current, {
-        title: "Latest position",
+        title: words.latestPosition,
         zIndexOffset: 1000,
         icon: L.divIcon({
           className: "voyage-boat",
@@ -420,7 +444,7 @@ const VoyageMap = ({
       ref={containerRef}
       className={cn("voyage-map h-full w-full", className)}
       role="application"
-      aria-label="Map of the crossing: planned route, track sailed so far and log entries"
+      aria-label={words.description}
     />
   );
 };

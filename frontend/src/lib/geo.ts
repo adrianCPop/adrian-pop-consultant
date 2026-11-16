@@ -101,6 +101,17 @@ const formatAxis = (value: number, degreeDigits: number, positive: string, negat
   }`;
 };
 
-/** Formats a position the way a chart or log would: 18°30′N 037°27′W. */
-export const formatCoord = ([lat, lon]: LatLon): string =>
-  `${formatAxis(lat, 2, "N", "S")} ${formatAxis(lon, 3, "E", "W")}`;
+/**
+ * Formats a position the way a chart or log would: 18°30′N 037°27′W.
+ * `letters` replaces a hemisphere's letter, for a language that writes it differently.
+ */
+export const formatCoord = (
+  [lat, lon]: LatLon,
+  letters: { north?: string; south?: string; east?: string; west?: string } = {}
+): string =>
+  `${formatAxis(lat, 2, letters.north ?? "N", letters.south ?? "S")} ${formatAxis(
+    lon,
+    3,
+    letters.east ?? "E",
+    letters.west ?? "W"
+  )}`;

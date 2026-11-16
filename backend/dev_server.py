@@ -98,9 +98,15 @@ async def seed_demo() -> None:
         {
             "$set": {
                 "eyebrow": "Atlantic crossing · demo data",
+                "eyebrow_ro": "Traversarea Atlanticului · date demonstrative",
                 "boat_name": "Demo Boat",
-                "origin": {"name": "Las Palmas", "lat": 28.13, "lon": -15.43},
-                "destination": {"name": "Saint Lucia", "lat": 14.08, "lon": -60.95},
+                "origin": {"name": "Las Palmas", "name_ro": "", "lat": 28.13, "lon": -15.43},
+                "destination": {
+                    "name": "Saint Lucia",
+                    "name_ro": "Sfânta Lucia",
+                    "lat": 14.08,
+                    "lon": -60.95,
+                },
                 "departure_ts": departure,
                 "arrived_ts": None,
                 "planned_route": [
