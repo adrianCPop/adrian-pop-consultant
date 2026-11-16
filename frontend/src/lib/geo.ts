@@ -47,6 +47,31 @@ export const destinationPoint = (from: LatLon, bearing: number, nm: number): Lat
   return [toDeg(lat2), ((((toDeg(lon2) + 180) % 360) + 360) % 360) - 180];
 };
 
+/**
+ * Length of the leg from a to b as a Mercator map draws it: a straight line there,
+ * which is one constant compass bearing (a rhumb line) at sea. A little longer than
+ * the great circle on a long east-west leg.
+ */
+export const rhumbDistanceNm = (a: LatLon, b: LatLon): number => {
+  const lat1 = toRad(a[0]);
+  const lat2 = toRad(b[0]);
+  const dLat = lat2 - lat1;
+  // The short way round, for a leg that crosses the date line.
+  const dLon = toRad(((((b[1] - a[1]) % 360) + 540) % 360) - 180);
+  const stretched = Math.log(Math.tan(Math.PI / 4 + lat2 / 2) / Math.tan(Math.PI / 4 + lat1 / 2));
+  // East-west scale along the leg; on a leg along a parallel it is that parallel's.
+  const scale = Math.abs(stretched) > 1e-12 ? dLat / stretched : Math.cos(lat1);
+
+  return Math.hypot(dLat, scale * dLon) * EARTH_RADIUS_NM;
+};
+
+export const rhumbPathLengthNm = (points: LatLon[]): number =>
+  points.reduce(
+    (total, point, index) =>
+      index === 0 ? 0 : total + rhumbDistanceNm(points[index - 1], point),
+    0
+  );
+
 export const pathLengthNm = (points: LatLon[]): number =>
   points.reduce(
     (total, point, index) => (index === 0 ? 0 : total + distanceNm(points[index - 1], point)),

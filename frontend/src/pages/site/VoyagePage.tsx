@@ -21,7 +21,13 @@ import {
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { compassPoint, distanceNm, formatCoord, pathLengthNm, type LatLon } from "@/lib/geo";
+import {
+  compassPoint,
+  distanceNm,
+  formatCoord,
+  rhumbPathLengthNm,
+  type LatLon,
+} from "@/lib/geo";
 import {
   fetchVoyage,
   photoUrl,
@@ -576,6 +582,11 @@ const VoyagePage = () => {
   const longestRun = stats ? Math.max(1, ...stats.dailyRuns.map((run) => run.nm)) : 1;
   const manyRuns = (stats?.dailyRuns.length ?? 0) > 12;
   const weather = data.weather;
+  // The hour the forecast is for. The service gives it in UTC without saying so.
+  const forecastAt = weather?.time ? Date.parse(`${weather.time}Z`) : Number.NaN;
+  const forecastTime = Number.isNaN(forecastAt) ? null : forecastAt;
+  // The length of the dashed line as the map draws it.
+  const plannedNm = rhumbPathLengthNm(voyage.planned_route);
   // The map is rebuilt when what it draws changes.
   const mapKey = [
     data.track.length,
@@ -979,17 +990,20 @@ const VoyagePage = () => {
               under way.
             </p>
             <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
-              <div>
-                <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Planned route
-                </dt>
-                <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
-                  {nm(pathLengthNm(voyage.planned_route))} nm
-                </dd>
-                <dd className="mt-1 text-xs text-muted-foreground">
-                  Along the dashed line on the map
-                </dd>
-              </div>
+              {/* Nothing to say for a route that is a single place, such as a round trip with no waypoints yet. */}
+              {plannedNm >= 1 ? (
+                <div>
+                  <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Planned route
+                  </dt>
+                  <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
+                    {nm(plannedNm)} nm
+                  </dd>
+                  <dd className="mt-1 text-xs text-muted-foreground">
+                    Along the dashed line on the map
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   Departure
@@ -1008,7 +1022,11 @@ const VoyagePage = () => {
             <WeatherPanel
               weather={weather}
               title={`Weather at ${voyage.origin.name}`}
-              caption="Forecast for the port of departure, now."
+              caption={
+                forecastTime === null
+                  ? "Forecast for the port of departure."
+                  : `Forecast for the port of departure, for ${clock(forecastTime)}.`
+              }
               ashore
             />
           ) : null}
