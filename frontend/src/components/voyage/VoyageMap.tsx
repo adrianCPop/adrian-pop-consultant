@@ -10,6 +10,12 @@ export interface VoyageMapPin {
   label: string;
   title: string;
   pos: LatLon;
+  /**
+   * Pixels to draw the pin away from `pos` (right, down). For an entry that stands
+   * for a place rather than a position, so it does not sit on the place's own dot
+   * or on an entry written right there.
+   */
+  offset?: [number, number];
 }
 
 export interface MapView {
@@ -244,7 +250,7 @@ const VoyageMap = ({
           className: "voyage-pin",
           html: `<span>${pin.label}</span>`,
           iconSize: [22, 22],
-          iconAnchor: [11, 11],
+          iconAnchor: [11 - (pin.offset?.[0] ?? 0), 11 - (pin.offset?.[1] ?? 0)],
         }),
       });
       marker.on("click", () => onSelectRef.current(pin.id));

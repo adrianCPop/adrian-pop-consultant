@@ -21,7 +21,14 @@ import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { compassPoint, distanceNm, formatCoord, type LatLon } from "@/lib/geo";
-import { fetchVoyage, photoUrl, type VoyageData, type VoyageEntry, type VoyagePhotoRef } from "@/lib/voyageApi";
+import {
+  fetchVoyage,
+  photoUrl,
+  type VoyageData,
+  type VoyageEntry,
+  type VoyagePhotoRef,
+  type VoyagePort,
+} from "@/lib/voyageApi";
 import { computeStats, toFixes } from "@/lib/voyageStats";
 import { cn } from "@/lib/utils";
 
@@ -194,17 +201,57 @@ const VoyagePage = () => {
       ? latestEntry.id
       : undefined;
 
+  /**
+   * Entries written in port have no position: nothing is published about where
+   * the boat and the crew are before departure or after landfall. `port` gives the
+   * port each of them belongs to (before departure: where the crossing starts;
+   * after landfall: where it ends). `pinned` holds the newest one from each port,
+   * which is drawn on the map at the port itself, a place that is public anyway.
+   */
+  const ashore = useMemo(() => {
+    const port = new Map<string, VoyagePort>();
+    const newest = new Map<VoyagePort, string>();
+    if (voyage) {
+      // Oldest first, so the last one seen for a port is its newest.
+      for (const entry of entries) {
+        if (entry.pos !== null) {
+          continue;
+        }
+        const time = Date.parse(entry.time);
+        const where =
+          departure === null || time < departure
+            ? voyage.origin
+            : arrival !== null && time > arrival
+              ? voyage.destination
+              : null;
+        if (where) {
+          port.set(entry.id, where);
+          newest.set(where, entry.id);
+        }
+      }
+    }
+    return { port, pinned: new Set(newest.values()) };
+  }, [entries, voyage, departure, arrival]);
+
   const pins = useMemo<VoyageMapPin[]>(
     () =>
-      entries
-        .filter((entry) => entry.pos !== null && entry.id !== boatEntryId)
-        .map((entry) => ({
-          id: entry.id,
-          label: String(entryNumbers.get(entry.id)),
-          title: entry.title || "Log entry",
-          pos: entry.pos as LatLon,
-        })),
-    [entries, entryNumbers, boatEntryId]
+      entries.flatMap((entry) => {
+        const port = ashore.pinned.has(entry.id) ? ashore.port.get(entry.id) : undefined;
+        const pos: LatLon | null = entry.pos ?? (port ? [port.lat, port.lon] : null);
+        return pos === null || entry.id === boatEntryId
+          ? []
+          : [
+              {
+                id: entry.id,
+                label: String(entryNumbers.get(entry.id)),
+                title: entry.title || "Log entry",
+                pos,
+                // Just below the port's own dot, clear of an entry written right there.
+                ...(port ? { offset: [0, 24] as [number, number] } : {}),
+              },
+            ];
+      }),
+    [entries, entryNumbers, boatEntryId, ashore]
   );
 
   const entriesNewestFirst = useMemo(() => [...entries].reverse(), [entries]);
@@ -335,7 +382,14 @@ const VoyagePage = () => {
   const manyRuns = (stats?.dailyRuns.length ?? 0) > 12;
   const weather = data.weather;
   // The map is rebuilt when what it draws changes.
-  const mapKey = `${data.track.length}:${data.track[data.track.length - 1]?.[2] ?? 0}:${entries.length}:${voyage.planned_route.length}`;
+  const mapKey = [
+    data.track.length,
+    data.track[data.track.length - 1]?.[2] ?? 0,
+    entries.length,
+    voyage.planned_route.length,
+    // The ports and the two dates decide where entries written in port are drawn.
+    JSON.stringify([voyage.origin, voyage.destination, voyage.departure, voyage.arrived_at]),
+  ].join(":");
 
   let statusLine: ReactNode;
   if (status === "planned") {
@@ -754,6 +808,8 @@ const VoyagePage = () => {
                       </span>
                       {entry.pos ? (
                         <span className="tabular-nums">{formatCoord(entry.pos)}</span>
+                      ) : ashore.port.has(entry.id) ? (
+                        <span>{ashore.port.get(entry.id)?.name}</span>
                       ) : null}
                     </div>
 
@@ -797,7 +853,7 @@ const VoyagePage = () => {
                           {entry.photos.length} {entry.photos.length === 1 ? "photo" : "photos"}
                         </span>
                       ) : null}
-                      {entry.pos ? (
+                      {entry.pos || ashore.pinned.has(entry.id) ? (
                         <button
                           type="button"
                           onClick={() => showOnMap(entry.id)}
@@ -939,6 +995,8 @@ const VoyagePage = () => {
                     </span>
                     {shown.entry.pos ? (
                       <span className="tabular-nums">{formatCoord(shown.entry.pos)}</span>
+                    ) : ashore.port.has(shown.entry.id) ? (
+                      <span>{ashore.port.get(shown.entry.id)?.name}</span>
                     ) : null}
                   </div>
                   <DialogTitle className="mt-3 break-words font-heading text-xl font-semibold leading-snug text-foreground">
