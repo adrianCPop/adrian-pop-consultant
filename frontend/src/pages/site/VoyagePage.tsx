@@ -423,8 +423,11 @@ const VoyagePage = () => {
 
   const openedId = opened?.id ?? null;
   useEffect(() => {
-    // Stepping to another entry starts it at its top.
-    overlayScrollerRef.current?.scrollTo({ top: 0 });
+    // Stepping to another entry starts it at its top. Not on closing: the entry
+    // would jump to its top while it fades out.
+    if (openedId) {
+      overlayScrollerRef.current?.scrollTo({ top: 0 });
+    }
   }, [openedId]);
 
   useEffect(() => {
@@ -461,8 +464,11 @@ const VoyagePage = () => {
 
   /** A pin or the boat was clicked on the map: mark it and open the entry over the page. */
   const openEntry = (id: string) => {
+    const active = document.activeElement;
+    // Some browsers do not focus a button that is clicked: <body> is then "active",
+    // which is no place to return to.
     returnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      active instanceof HTMLElement && active !== document.body ? active : null;
     lastOpenedIdRef.current = id;
     steppedRef.current = false;
     openedAtRef.current = Date.now();
@@ -486,6 +492,19 @@ const VoyagePage = () => {
     const target =
       (steppedRef.current ? pin ?? back : back ?? pin) ??
       map?.querySelector<HTMLElement>(".voyage-map");
+    if (id && map && target === pin && pin) {
+      // After stepping, that pin can lie outside the part of the map in view.
+      const frame = map.getBoundingClientRect();
+      const box = pin.getBoundingClientRect();
+      const inView =
+        box.left >= frame.left &&
+        box.right <= frame.right &&
+        box.top >= frame.top &&
+        box.bottom <= frame.bottom;
+      if (!inView) {
+        setFocus({ id, nonce: Date.now() });
+      }
+    }
     target?.focus({ preventScroll: true });
   };
 
@@ -1145,6 +1164,11 @@ const VoyagePage = () => {
           }}
           onKeyDown={(event) => {
             // Left and right arrows step through the entries, as the two buttons do.
+            // With a modifier they are the browser's (back, forward) or the reader's
+            // (extending a selection), and are left alone.
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+              return;
+            }
             const target =
               event.key === "ArrowLeft"
                 ? earlierEntry
@@ -1153,6 +1177,11 @@ const VoyagePage = () => {
                   : null;
             if (target) {
               event.preventDefault();
+              // A photo thumbnail that has the focus is about to disappear with its
+              // entry. The scrolling part takes the focus over, so the keys go on working.
+              if (overlayScrollerRef.current?.contains(event.target as Node)) {
+                overlayScrollerRef.current.focus({ preventScroll: true });
+              }
               stepTo(target);
             }
           }}
@@ -1285,9 +1314,11 @@ const VoyagePage = () => {
                       <ArrowLeft className="h-3.5 w-3.5" />
                       Earlier
                     </button>
-                    <span className="whitespace-nowrap tabular-nums" aria-live="polite">
+                    {/* Read out whole on every step, with the title, which is not announced otherwise. */}
+                    <span className="whitespace-nowrap tabular-nums" aria-live="polite" aria-atomic="true">
                       <span className="sr-only">Entry </span>
                       {shownIndex + 1} of {entries.length}
+                      <span className="sr-only">: {shown.entry.title || "Log entry"}</span>
                     </span>
                     <button
                       type="button"
