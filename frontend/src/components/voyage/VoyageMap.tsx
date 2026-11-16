@@ -188,10 +188,15 @@ const VoyageMap = ({
       interactive: false,
     }).addTo(map);
 
+    // The eastern port sits near the right edge, under the legend. Its name goes to
+    // the left of the dot, so a long one is neither covered nor cut off by the edge.
+    const easternPort = from.pos[1] >= to.pos[1] ? from : to;
+
     [from, to].forEach((port) => {
       // Leaflet treats a string as HTML, so hand it an element with plain text.
       const label = document.createElement("span");
       label.textContent = port.name;
+      const toTheLeft = port === easternPort;
 
       L.circleMarker(port.pos, {
         radius: 4.5,
@@ -203,12 +208,32 @@ const VoyageMap = ({
       })
         .bindTooltip(label, {
           permanent: true,
-          direction: "top",
-          offset: [0, -14],
+          direction: toTheLeft ? "left" : "top",
+          offset: toTheLeft ? [-8, 0] : [0, -14],
           className: "voyage-label",
         })
         .addTo(map);
     });
+
+    // Leaflet lets a marker be reached with Tab but does nothing on Enter, so a
+    // marker that opens an entry gets that itself. Its element only exists once the
+    // map has a view, which is set further down: hence "add". Call before addTo().
+    const openWithKeyboard = (marker: L.Marker, id: string) => {
+      marker.on("add", () => {
+        const element = marker.getElement();
+        if (!element) {
+          return;
+        }
+        // Lets the page find this entry's marker again after the map has been redrawn.
+        element.dataset.entryId = id;
+        element.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelectRef.current(id);
+          }
+        });
+      });
+    };
 
     const pinMarkers: Record<string, L.Marker> = {};
     pins.forEach((pin) => {
@@ -223,6 +248,7 @@ const VoyageMap = ({
         }),
       });
       marker.on("click", () => onSelectRef.current(pin.id));
+      openWithKeyboard(marker, pin.id);
       marker.addTo(map);
       pinMarkers[pin.id] = marker;
     });
@@ -248,6 +274,7 @@ const VoyageMap = ({
       });
       if (boatEntryId) {
         boat.on("click", () => onSelectRef.current(boatEntryId));
+        openWithKeyboard(boat, boatEntryId);
       }
       boat.addTo(map);
       boatMarkerRef.current = boat;
