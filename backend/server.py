@@ -13,6 +13,7 @@ from typing import Optional
 
 from routes.articles import router as articles_router
 from routes.contact import router as contact_router
+from routes.voyage import router as voyage_router
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -44,6 +45,15 @@ MONGO_URL = os.getenv(
 
 MONGO_DB_NAME = os.getenv("MONGO_DB", "adrian_pop_portfolio")
 
+
+def address_for_log(url: str) -> str:
+    """Host and database only, so the user name and password never reach the log.
+
+    Everything up to the last "@" is dropped rather than parsed: a password that
+    was not URL-encoded can contain "/" or "@" and would fool a URL parser.
+    """
+    return url.rsplit("@", 1)[-1].split("://", 1)[-1].split("?", 1)[0]
+
 # -----------------------------------------------------------------------------
 # Globals (initialized on startup)
 # -----------------------------------------------------------------------------
@@ -67,7 +77,7 @@ class StatusCheckCreate(BaseModel):
 async def on_startup():
     global mongo_client, db
     logger.info("Starting up the application...")
-    logger.info(f"MongoDB URL: {MONGO_URL}")
+    logger.info(f"MongoDB: {address_for_log(MONGO_URL)}")
     logger.info(f"Database: {MONGO_DB_NAME}")
 
     mongo_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000)
@@ -146,6 +156,7 @@ async def create_status(payload: StatusCheckCreate):
 
 api_router.include_router(articles_router)
 api_router.include_router(contact_router)
+api_router.include_router(voyage_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,0 +1,171 @@
+/* Leaflet, restyled to sit inside the site's dark theme. */
+
+.voyage-map {
+  background: hsl(226 42% 9%);
+  font-family: inherit;
+  outline: none;
+}
+
+/* The base tiles are neutral grey; pull them towards the site's navy. */
+.voyage-map .leaflet-tile-pane {
+  filter: sepia(1) hue-rotate(178deg) saturate(1.9) brightness(1.15);
+}
+
+.voyage-map .leaflet-control-attribution {
+  background: hsl(228 39% 8% / 0.72);
+  color: hsl(220 15% 62%);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-top-left-radius: 6px;
+}
+
+.voyage-map .leaflet-control-attribution a {
+  color: inherit;
+}
+
+.voyage-map .leaflet-bar {
+  border: 1px solid hsl(224 19% 25%);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.voyage-map .leaflet-bar a {
+  background: hsl(226 28% 12% / 0.92);
+  color: hsl(220 31% 94%);
+  border-bottom-color: hsl(224 19% 25%);
+}
+
+.voyage-map .leaflet-bar a:hover {
+  background: hsl(226 19% 19%);
+  color: hsl(220 31% 94%);
+}
+
+/* Log-entry pins. Leaflet positions the root with transform, so effects go on the child. */
+.voyage-pin {
+  cursor: pointer;
+}
+
+.voyage-pin span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  border: 2px solid hsl(184 100% 43%);
+  background: hsl(228 39% 8%);
+  color: hsl(220 31% 94%);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.voyage-pin:hover span,
+.voyage-pin:focus-visible span,
+.voyage-pin.is-active span {
+  background: hsl(184 100% 43%);
+  color: hsl(225 42% 8%);
+}
+
+.voyage-pin.is-active span {
+  box-shadow: 0 0 0 6px hsl(184 100% 43% / 0.25);
+}
+
+.voyage-pin:focus {
+  outline: none;
+}
+
+@media (max-width: 639px) {
+  .voyage-pin span {
+    font-size: 0;
+    transform: scale(0.55);
+  }
+}
+
+/* Boat marker */
+.voyage-boat {
+  cursor: pointer;
+}
+
+.voyage-boat:focus {
+  outline: none;
+}
+
+.voyage-boat__pulse {
+  position: absolute;
+  inset: 6px;
+  border-radius: 9999px;
+  background: hsl(184 100% 43% / 0.5);
+  animation: voyage-pulse 2.4s ease-out infinite;
+}
+
+.voyage-boat__body {
+  position: absolute;
+  inset: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: hsl(184 100% 43%);
+  box-shadow: 0 0 0 3px hsl(228 39% 8%), 0 6px 18px hsl(184 100% 43% / 0.45);
+}
+
+.voyage-boat.is-active .voyage-boat__body {
+  box-shadow: 0 0 0 3px hsl(228 39% 8%), 0 0 0 9px hsl(184 100% 43% / 0.3);
+}
+
+.voyage-boat__body svg {
+  width: 16px;
+  height: 16px;
+  fill: hsl(225 42% 8%);
+}
+
+@keyframes voyage-pulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voyage-boat__pulse {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* Port names */
+.leaflet-tooltip.voyage-label {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  color: hsl(220 31% 94%);
+  font-family: "Sora", "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 6px hsl(228 39% 6%), 0 0 2px hsl(228 39% 6%);
+}
+
+.leaflet-tooltip.voyage-label::before {
+  display: none;
+}
+
+/* Latitude and longitude labels along the edges */
+.voyage-grat-label {
+  color: hsl(220 20% 80% / 0.45);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}

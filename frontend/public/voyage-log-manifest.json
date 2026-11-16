@@ -1,0 +1,13 @@
+{
+  "name": "Ship's log",
+  "short_name": "Ship's log",
+  "description": "Crew logbook for the crossing. Works without a connection.",
+  "display": "standalone",
+  "scope": "/voyage/",
+  "background_color": "#0c0f1c",
+  "theme_color": "#0c0f1c",
+  "icons": [
+    { "src": "/voyage-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/voyage-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
