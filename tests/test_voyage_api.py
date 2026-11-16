@@ -202,6 +202,74 @@ def test_track_is_public_after_departure_and_stops_at_arrival(ctx):
     assert len(data["track"]) == 2
 
 
+# --------------------------------------------------------------------------- weather
+
+
+def weather_after_refresh(ctx, monkeypatch, forecast=None):
+    """Lets the weather service "answer", and returns (payload, the spots it was asked about).
+
+    The forecast is fetched in the background, so the first visitor gets none and a
+    later one gets it; this waits for that.
+    """
+    asked = []
+
+    async def fake_weather(lat, lon):
+        asked.append((lat, lon))
+        return forecast or {"wind_kn": 14.0, "wind_dir_deg": 60.0, "air_c": 22.0}
+
+    monkeypatch.setattr(voyage_core, "fetch_weather", fake_weather)
+    data = ctx.public()
+    for _ in range(40):
+        if data["weather"] is not None:
+            break
+        time.sleep(0.05)
+        data = ctx.public()
+    return data, asked
+
+
+def test_before_departure_the_weather_is_for_the_port_of_departure(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    data, asked = weather_after_refresh(ctx, monkeypatch)
+    assert data["status"] == "planned"
+    assert data["weather"] == {"wind_kn": 14.0, "wind_dir_deg": 60.0, "air_c": 22.0}
+    assert asked == [(28.13, -15.43)]
+
+
+def test_with_no_departure_date_the_weather_is_for_the_port_of_departure(ctx, monkeypatch):
+    ctx.configure(departure=None)
+    data, asked = weather_after_refresh(ctx, monkeypatch)
+    assert data["status"] == "planned"
+    assert data["weather"] is not None
+    assert asked == [(28.13, -15.43)]
+
+
+def test_under_way_the_weather_is_for_the_boat_not_the_port(ctx, monkeypatch):
+    ctx.configure(departure_h=-48)
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    ctx.fix(tracker, LAT, LON, NOW - 2 * HOUR)
+    data, asked = weather_after_refresh(ctx, monkeypatch)
+    assert data["status"] == "under_way"
+    assert data["weather"] is not None
+    assert asked == [(LAT, LON)]
+
+
+def test_under_way_without_a_position_there_is_no_weather(ctx, monkeypatch):
+    # The port's weather would pass for the boat's: better none.
+    ctx.configure(departure_h=-48)
+    data, asked = weather_after_refresh(ctx, monkeypatch)
+    assert data["status"] == "under_way"
+    assert data["weather"] is None
+    assert asked == []
+
+
+def test_after_arrival_there_is_no_weather(ctx, monkeypatch):
+    ctx.configure(departure_h=-48, arrived_at=iso(NOW - 5 * HOUR))
+    data, asked = weather_after_refresh(ctx, monkeypatch)
+    assert data["status"] == "arrived"
+    assert data["weather"] is None
+    assert asked == []
+
+
 # --------------------------------------------------------------------------- admin
 
 

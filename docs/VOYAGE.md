@@ -131,7 +131,12 @@ at home does not show your home on the map.
 
 - The track is public from the departure time, in real time, to anyone.
 - After the arrival time set in the admin page, newer positions are not shown.
-- Entries written before departure or after arrival appear without a position.
+- Entries written before departure or after arrival carry no position. On the map
+  the newest one from each port is drawn at that port, which is public anyway; the
+  others are reached with Earlier and Later in the entry overlay, or in the logbook.
+- Before departure the page shows the length of the planned route and the forecast
+  for the port of departure, never for where the boat really is. Once under way the
+  forecast is for the boat's last position; after arrival there is none.
 - Photos are re-encoded on the server; camera metadata, including the phone's GPS
   tag, is removed.
 - Every position that arrives is kept, unless it is plainly junk (no coordinates,

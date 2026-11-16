@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   CalendarClock,
   Camera,
@@ -20,7 +21,7 @@ import {
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { compassPoint, distanceNm, formatCoord, type LatLon } from "@/lib/geo";
+import { compassPoint, distanceNm, formatCoord, pathLengthNm, type LatLon } from "@/lib/geo";
 import {
   fetchVoyage,
   photoUrl,
@@ -28,6 +29,7 @@ import {
   type VoyageEntry,
   type VoyagePhotoRef,
   type VoyagePort,
+  type VoyageWeather,
 } from "@/lib/voyageApi";
 import { MIN_SPEED_KN, compareWithPlan, projectCourse, steadyCourse } from "@/lib/voyageCourse";
 import { computeStats, toFixes } from "@/lib/voyageStats";
@@ -117,6 +119,94 @@ const ConditionRow = ({ icon, label, value, detail }: ConditionRowProps) => (
   </div>
 );
 
+interface WeatherPanelProps {
+  weather: VoyageWeather;
+  title: string;
+  caption: string;
+  /**
+   * For a place on land. What the forecast has no figure for is left out instead
+   * of reading "No data": the sea-state service often has none inside a harbour.
+   */
+  ashore?: boolean;
+}
+
+const WeatherPanel = ({ weather, title, caption, ashore = false }: WeatherPanelProps) => {
+  const rows = [
+    {
+      key: "wind",
+      missing: weather.wind_kn === null,
+      icon: <Wind className="h-4 w-4" />,
+      label: "Wind",
+      value:
+        weather.wind_kn === null
+          ? "No data"
+          : `${weather.wind_dir_deg === null ? "" : `${compassPoint(weather.wind_dir_deg)} `}${Math.round(weather.wind_kn)} kn`,
+      detail: weather.gust_kn === null ? "" : `Gusts ${Math.round(weather.gust_kn)} kn`,
+    },
+    {
+      key: "waves",
+      missing: weather.wave_m === null,
+      icon: <Waves className="h-4 w-4" />,
+      label: "Waves",
+      value: one(weather.wave_m, "m"),
+      detail:
+        weather.wave_dir_deg === null || weather.wave_period_s === null
+          ? ""
+          : `From the ${compassPoint(weather.wave_dir_deg)}, ${Math.round(weather.wave_period_s)} s apart`,
+    },
+    {
+      key: "air",
+      missing: weather.air_c === null,
+      icon: <Thermometer className="h-4 w-4" />,
+      label: "Air",
+      value: weather.air_c === null ? "No data" : `${Math.round(weather.air_c)} °C`,
+      detail: ashore ? "Two metres above the ground" : "Two metres above the sea",
+    },
+    {
+      key: "water",
+      missing: weather.sea_c === null,
+      icon: <Thermometer className="h-4 w-4" />,
+      label: "Water",
+      value: weather.sea_c === null ? "No data" : `${Math.round(weather.sea_c)} °C`,
+      detail: "Sea surface",
+    },
+  ].filter((row) => !(ashore && row.missing));
+
+  return (
+    <div className="panel-soft rounded-2xl p-5 sm:p-6">
+      <h2 className="font-heading text-base font-semibold text-foreground">{title}</h2>
+      <p className="mt-1 text-xs text-muted-foreground">{caption}</p>
+      {rows.length > 0 ? (
+        <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5">
+          {rows.map((row) => (
+            <ConditionRow
+              key={row.key}
+              icon={row.icon}
+              label={row.label}
+              value={row.value}
+              detail={row.detail}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 text-sm text-muted-foreground">No forecast for this spot right now.</p>
+      )}
+      <p className="mt-4 text-[0.68rem] text-muted-foreground">
+        Weather data by{" "}
+        <a
+          href="https://open-meteo.com/"
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-foreground"
+        >
+          Open-Meteo
+        </a>
+        .
+      </p>
+    </div>
+  );
+};
+
 interface Loaded {
   data: VoyageData;
   /** Difference between the server's clock and this device's, in ms. */
@@ -139,8 +229,10 @@ const VoyagePage = () => {
   const goToAfterCloseRef = useRef<string | null>(null);
   /** What had the keyboard focus when the overlay opened (the pin, usually), to hand it back. */
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  /** The entry last opened, to find its pin again if the map was redrawn meanwhile. */
+  /** The entry last shown in the overlay, to find its pin when the overlay closes. */
   const lastOpenedIdRef = useRef<string | null>(null);
+  /** True once the visitor has stepped on from the entry the overlay was opened with. */
+  const steppedRef = useRef(false);
   const openedAtRef = useRef(0);
   /** What the overlay displays; see where it is filled in. */
   const shownRef = useRef<{ entry: VoyageEntry; photo: VoyagePhotoRef | null } | null>(null);
@@ -323,6 +415,20 @@ const VoyagePage = () => {
     shownRef.current = { entry: openedEntry, photo: openedPhoto };
   }
   const shown = shownRef.current;
+  // The entries written just before and just after the one shown.
+  const shownIndex = shown ? entries.findIndex((entry) => entry.id === shown.entry.id) : -1;
+  const earlierEntry = shownIndex > 0 ? entries[shownIndex - 1] : null;
+  const laterEntry =
+    shownIndex >= 0 && shownIndex < entries.length - 1 ? entries[shownIndex + 1] : null;
+
+  const openedId = opened?.id ?? null;
+  useEffect(() => {
+    // Stepping to another entry starts it at its top. Not on closing: the entry
+    // would jump to its top while it fades out.
+    if (openedId) {
+      overlayScrollerRef.current?.scrollTo({ top: 0 });
+    }
+  }, [openedId]);
 
   useEffect(() => {
     // The entry was deleted while it was open. Forget it, so that it does not open
@@ -358,26 +464,59 @@ const VoyagePage = () => {
 
   /** A pin or the boat was clicked on the map: mark it and open the entry over the page. */
   const openEntry = (id: string) => {
+    const active = document.activeElement;
+    // Some browsers do not focus a button that is clicked: <body> is then "active",
+    // which is no place to return to.
     returnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      active instanceof HTMLElement && active !== document.body ? active : null;
     lastOpenedIdRef.current = id;
+    steppedRef.current = false;
     openedAtRef.current = Date.now();
     setSelectedId(id);
     setOpened({ id, photo: 0 });
   };
 
-  /** Where focus goes when the overlay closes: back to what opened it, if that is still there. */
+  /**
+   * Where focus goes when the overlay closes: back to what opened it. If the visitor
+   * stepped on to another entry, to that entry's pin instead, when it has one; and to
+   * the pin as well when what opened the overlay is gone (the map was redrawn).
+   */
   const focusAfterOverlay = () => {
-    const back = returnFocusRef.current;
+    const back = returnFocusRef.current?.isConnected ? returnFocusRef.current : null;
     const id = lastOpenedIdRef.current;
     returnFocusRef.current = null;
     const map = mapSectionRef.current;
+    const pin = id
+      ? map?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`) ?? null
+      : null;
     const target =
-      (back?.isConnected ? back : null) ??
-      // The map was redrawn while the overlay was open: the same entry's new pin.
-      (id ? map?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`) : null) ??
+      (steppedRef.current ? pin ?? back : back ?? pin) ??
       map?.querySelector<HTMLElement>(".voyage-map");
+    if (id && map && target === pin && pin) {
+      // After stepping, that pin can lie outside the part of the map in view.
+      const frame = map.getBoundingClientRect();
+      const box = pin.getBoundingClientRect();
+      const inView =
+        box.left >= frame.left &&
+        box.right <= frame.right &&
+        box.top >= frame.top &&
+        box.bottom <= frame.bottom;
+      if (!inView) {
+        setFocus({ id, nonce: Date.now() });
+      }
+    }
     target?.focus({ preventScroll: true });
+  };
+
+  /** In the overlay, on to the entry written before or after the one shown. */
+  const stepTo = (entry: VoyageEntry | null) => {
+    if (!entry || !openedEntry) {
+      return;
+    }
+    lastOpenedIdRef.current = entry.id;
+    steppedRef.current = true;
+    setSelectedId(entry.id);
+    setOpened({ id: entry.id, photo: 0 });
   };
 
   const closeAndReadInLogbook = (id: string) => {
@@ -816,60 +955,11 @@ const VoyagePage = () => {
             </div>
 
             {weather ? (
-              <div className="panel-soft rounded-2xl p-5 sm:p-6">
-                <h2 className="font-heading text-base font-semibold text-foreground">
-                  Weather at the boat
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Forecast for the last position, not measured on board.
-                </p>
-                <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5">
-                  <ConditionRow
-                    icon={<Wind className="h-4 w-4" />}
-                    label="Wind"
-                    value={
-                      weather.wind_kn === null
-                        ? "No data"
-                        : `${weather.wind_dir_deg === null ? "" : `${compassPoint(weather.wind_dir_deg)} `}${Math.round(weather.wind_kn)} kn`
-                    }
-                    detail={weather.gust_kn === null ? "" : `Gusts ${Math.round(weather.gust_kn)} kn`}
-                  />
-                  <ConditionRow
-                    icon={<Waves className="h-4 w-4" />}
-                    label="Waves"
-                    value={one(weather.wave_m, "m")}
-                    detail={
-                      weather.wave_dir_deg === null || weather.wave_period_s === null
-                        ? ""
-                        : `From the ${compassPoint(weather.wave_dir_deg)}, ${Math.round(weather.wave_period_s)} s apart`
-                    }
-                  />
-                  <ConditionRow
-                    icon={<Thermometer className="h-4 w-4" />}
-                    label="Air"
-                    value={weather.air_c === null ? "No data" : `${Math.round(weather.air_c)} °C`}
-                    detail="Two metres above the sea"
-                  />
-                  <ConditionRow
-                    icon={<Thermometer className="h-4 w-4" />}
-                    label="Water"
-                    value={weather.sea_c === null ? "No data" : `${Math.round(weather.sea_c)} °C`}
-                    detail="Sea surface"
-                  />
-                </div>
-                <p className="mt-4 text-[0.68rem] text-muted-foreground">
-                  Weather data by{" "}
-                  <a
-                    href="https://open-meteo.com/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline hover:text-foreground"
-                  >
-                    Open-Meteo
-                  </a>
-                  .
-                </p>
-              </div>
+              <WeatherPanel
+                weather={weather}
+                title="Weather at the boat"
+                caption="Forecast for the last position, not measured on board."
+              />
             ) : null}
           </section>
         </>
@@ -877,6 +967,52 @@ const VoyagePage = () => {
         <p className="panel-soft mt-5 rounded-2xl px-5 py-5 text-sm text-muted-foreground sm:px-6">
           No position has arrived yet. The track and the figures appear with the first one.
         </p>
+      ) : status === "planned" ? (
+        <section
+          aria-label="The plan"
+          className={cn("mt-5 grid gap-4", weather && "lg:grid-cols-[1.45fr_1fr]")}
+        >
+          <div className="panel-soft rounded-2xl p-5 sm:p-6">
+            <h2 className="font-heading text-base font-semibold text-foreground">The plan</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The distance sailed, the speed and the daily runs appear here once the boat is
+              under way.
+            </p>
+            <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
+              <div>
+                <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Planned route
+                </dt>
+                <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
+                  {nm(pathLengthNm(voyage.planned_route))} nm
+                </dd>
+                <dd className="mt-1 text-xs text-muted-foreground">
+                  Along the dashed line on the map
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Departure
+                </dt>
+                <dd className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
+                  {departure ? dayMonth(departure) : "Not set yet"}
+                </dd>
+                <dd className="mt-1 text-xs text-muted-foreground">
+                  {departure ? clock(departure) : `From ${voyage.origin.name}`}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          {weather ? (
+            <WeatherPanel
+              weather={weather}
+              title={`Weather at ${voyage.origin.name}`}
+              caption="Forecast for the port of departure, now."
+              ashore
+            />
+          ) : null}
+        </section>
       ) : null}
 
       <section className="mt-14 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
@@ -1026,6 +1162,29 @@ const VoyagePage = () => {
             event.preventDefault();
             (overlayScrollerRef.current ?? (event.currentTarget as HTMLElement)).focus();
           }}
+          onKeyDown={(event) => {
+            // Left and right arrows step through the entries, as the two buttons do.
+            // With a modifier they are the browser's (back, forward) or the reader's
+            // (extending a selection), and are left alone.
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+              return;
+            }
+            const target =
+              event.key === "ArrowLeft"
+                ? earlierEntry
+                : event.key === "ArrowRight"
+                  ? laterEntry
+                  : null;
+            if (target) {
+              event.preventDefault();
+              // A photo thumbnail that has the focus is about to disappear with its
+              // entry. The scrolling part takes the focus over, so the keys go on working.
+              if (overlayScrollerRef.current?.contains(event.target as Node)) {
+                overlayScrollerRef.current.focus({ preventScroll: true });
+              }
+              stepTo(target);
+            }
+          }}
           onPointerDownOutside={(event) => {
             // The second press of a double-click on a pin lands outside the overlay
             // it has just opened. It must not close it again.
@@ -1124,21 +1283,61 @@ const VoyagePage = () => {
                       {shown.entry.body}
                     </p>
                   ) : null}
+                  {shown.entry.author || shown.entry.photos.length > 0 ? (
+                    <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      {shown.entry.author ? <span>Written by {shown.entry.author}</span> : null}
+                      {shown.entry.photos.length > 0 ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Camera className="h-3.5 w-3.5 text-primary" />
+                          {shown.entry.photos.length}{" "}
+                          {shown.entry.photos.length === 1 ? "photo" : "photos"}
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground sm:px-6">
-                {shown.entry.author ? <span>Written by {shown.entry.author}</span> : null}
-                {shown.entry.photos.length > 0 ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Camera className="h-3.5 w-3.5 text-primary" />
-                    {shown.entry.photos.length} {shown.entry.photos.length === 1 ? "photo" : "photos"}
-                  </span>
+              <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground sm:px-6">
+                {entries.length > 1 && shownIndex >= 0 ? (
+                  <>
+                    {/* Marked as unavailable rather than disabled, so the button keeps the focus at either end. */}
+                    <button
+                      type="button"
+                      onClick={() => stepTo(earlierEntry)}
+                      aria-disabled={!earlierEntry}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 whitespace-nowrap font-semibold",
+                        earlierEntry ? "text-primary hover:underline" : "cursor-default opacity-40"
+                      )}
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Earlier
+                    </button>
+                    {/* Read out whole on every step, with the title, which is not announced otherwise. */}
+                    <span className="whitespace-nowrap tabular-nums" aria-live="polite" aria-atomic="true">
+                      <span className="sr-only">Entry </span>
+                      {shownIndex + 1} of {entries.length}
+                      <span className="sr-only">: {shown.entry.title || "Log entry"}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => stepTo(laterEntry)}
+                      aria-disabled={!laterEntry}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 whitespace-nowrap font-semibold",
+                        laterEntry ? "text-primary hover:underline" : "cursor-default opacity-40"
+                      )}
+                    >
+                      Later
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => closeAndReadInLogbook(shown.entry.id)}
-                  className="ml-auto inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
+                  className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-primary hover:underline"
                 >
                   In the logbook
                   <ArrowDown className="h-3.5 w-3.5" />
