@@ -757,6 +757,7 @@ export const SERVER_TEXT_RO: Record<string, string> = {
   "Arrival is not a valid date and time": "Data și ora sosirii nu sunt valide",
   "Arrival has to be after departure": "Sosirea trebuie să fie după plecare",
   "A route point is outside the map": "Un punct al rutei este în afara hărții",
+  "A port needs a name": "Portul are nevoie de un nume",
   "Too many active links. Switch one off first.":
     "Prea multe linkuri active. Dezactivează mai întâi unul.",
   "No active link with that id": "Nu există un link activ cu acest identificator",

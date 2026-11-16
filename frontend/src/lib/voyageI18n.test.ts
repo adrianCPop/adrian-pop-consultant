@@ -264,6 +264,10 @@ describe("figures, dates and directions in each language", () => {
     expect(romanian.durationLong(48)).toBe("2 zile");
     expect(romanian.durationLong(25)).toBe("1 zi și 1 oră");
     expect(romanian.durationLong(20 * 24 + 21)).toBe("20 de zile și 21 de ore");
+    // Under a day there are no days to count.
+    expect(romanian.durationLong(5.5)).toBe("5 ore");
+    expect(english.durationLong(5.5)).toBe("5 h");
+    expect(romanian.durationLong(0.5)).toBe("0 ore");
   });
 
   it("uses the Romanian name of a place when there is one", () => {

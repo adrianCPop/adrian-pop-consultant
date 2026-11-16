@@ -285,9 +285,19 @@ const VoyageLogPage = () => {
         .then(() => navigator.serviceWorker.ready)
         .then((registration) => {
           // Hand the worker every file this page has loaded, so it opens with no connection.
-          const assets = performance
-            .getEntriesByType("resource")
-            .map((entry) => new URL(entry.name))
+          // The page's own script and stylesheet tags are listed too: they say which
+          // build this page is, even in a browser that keeps no record of what it loaded.
+          const tagged = Array.from(
+            document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>(
+              'script[src], link[rel="stylesheet"][href], link[rel="modulepreload"][href]'
+            ),
+            (element) => (element instanceof HTMLScriptElement ? element.src : element.href)
+          );
+          const assets = [
+            ...performance.getEntriesByType("resource").map((entry) => entry.name),
+            ...tagged,
+          ]
+            .map((address) => new URL(address, window.location.href))
             .filter(
               (url) =>
                 url.origin === window.location.origin &&

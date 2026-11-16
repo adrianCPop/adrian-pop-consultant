@@ -218,9 +218,11 @@ export const makeTexts = (language: VoyageLanguage) => {
       const days = Math.floor(hours / 24);
       const rest = Math.floor(hours - days * 24);
       const daysText = t("durationLong.days", { count: days });
-      return rest === 0
-        ? daysText
-        : t("durationLong.both", { days: daysText, hours: t("durationLong.hours", { count: rest }) });
+      const hoursText = t("durationLong.hours", { count: rest });
+      if (days === 0) {
+        return hoursText;
+      }
+      return rest === 0 ? daysText : t("durationLong.both", { days: daysText, hours: hoursText });
     },
 
     /**

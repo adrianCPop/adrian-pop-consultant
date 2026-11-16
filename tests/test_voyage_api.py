@@ -577,6 +577,32 @@ def test_an_older_admin_page_that_renames_a_port_drops_that_ports_romanian_name(
     assert voyage["eyebrow_ro"] == ""
 
 
+def test_a_stray_space_in_a_port_name_is_not_a_new_name(ctx):
+    ctx.configure(destination={"name": "Caribbean", "name_ro": "Caraibe", "lat": 14.08, "lon": -60.95})
+    ctx.configure(destination={"name": " Caribbean ", "lat": 14.08, "lon": -60.95})
+    assert ctx.public()["voyage"]["destination"] == {
+        "name": "Caribbean",
+        "name_ro": "Caraibe",
+        "lat": 14.08,
+        "lon": -60.95,
+    }
+
+
+def test_a_port_name_of_spaces_is_refused(ctx):
+    body = {
+        "eyebrow": "",
+        "boat_name": "",
+        "origin": {"name": "   ", "lat": 0, "lon": 0},
+        "destination": {"name": "B", "lat": 1, "lon": 1},
+        "departure": None,
+        "arrived_at": None,
+        "planned_route": [],
+    }
+    res = ctx.client.put("/api/voyage/admin/settings", json=body, headers=ctx.admin)
+    assert res.status_code == 422
+    assert res.json()["detail"] == "A port needs a name"
+
+
 def test_the_admin_page_can_clear_a_romanian_name(ctx):
     ctx.configure(
         eyebrow_ro="Traversarea Atlanticului",

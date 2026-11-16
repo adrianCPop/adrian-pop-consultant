@@ -91,8 +91,12 @@ const world = () => {
     return answer ? await answer : fetchFake(request);
   };
 
-  /** Opens the log as a browser does, then tells the worker what it loaded. Returns the build that opened, or null. */
-  const openLog = async (): Promise<string | null> => {
+  /**
+   * Opens the log as a browser does, then tells the worker what it loaded. Returns
+   * the build that opened, or null. `timed: false` is a browser that keeps no record
+   * of what it loaded: the page can then only name the files its own tags point to.
+   */
+  const openLog = async ({ timed = true } = {}): Promise<string | null> => {
     try {
       const page = await throughWorker("/voyage/log", "navigate");
       const name = (await page.clone().text()).includes("OLD") ? "OLD" : "NEW";
@@ -102,9 +106,10 @@ const world = () => {
           return null;
         }
       }
+      const inItsTags = loaded.filter((path) => path.startsWith("/assets/index-"));
       let done: Promise<unknown> = Promise.resolve();
       listeners.message({
-        data: { type: "precache", urls: ["/index.html", ...loaded] },
+        data: { type: "precache", urls: ["/index.html", ...(timed ? loaded : inItsTags)] },
         waitUntil: (promise: Promise<unknown>) => (done = promise),
       });
       await done;
@@ -147,6 +152,15 @@ describe("the crew log's offline copy", () => {
 
     state.network = "offline";
     expect(await openLog()).toBe("OLD");
+  });
+
+  it("is kept as well by a browser that has no record of the files it loaded", async () => {
+    const { state, openLog, saved } = world();
+    // The page still names the script and the stylesheet in its own tags.
+    expect(await openLog({ timed: false })).toBe("OLD");
+    expect(saved.has("/index.html")).toBe(true);
+    state.network = "offline";
+    expect(await openLog({ timed: false })).toBe("OLD");
   });
 
   it("never opens without a connection on a device that has not opened it before", async () => {

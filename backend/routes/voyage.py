@@ -884,6 +884,9 @@ async def save_settings(payload: SettingsIn, _: dict = Depends(require_admin), d
     origin, destination = payload.origin.model_dump(), payload.destination.model_dump()
     stored = await db.voyage_settings.find_one({"_id": "main"}) or {}
     for port, which in ((origin, "origin"), (destination, "destination")):
+        port["name"] = port["name"].strip()
+        if not port["name"]:
+            raise HTTPException(422, "A port needs a name")
         before = stored.get(which) or {}
         port["name_ro"] = _romanian(
             port["name_ro"], port["name"], before.get("name"), before.get("name_ro")
