@@ -74,6 +74,12 @@ WEATHER_RETRY_S = 5 * 60
 # weather now, and on a quiet day the last one fetched can be many hours old.
 WEATHER_MAX_AGE_S = 2 * 3600
 WEATHER_MAX_FIX_AGE_S = 48 * 3600
+# The wave forecast for the ocean around the route. The models behind it are run
+# every six to twelve hours, and every point of it counts against a daily allowance.
+SEA_TTL_S = 6 * 3600
+# After a failure the service is left alone for this long, then twice as long, and so on.
+SEA_RETRY_S = 30 * 60
+SEA_MAX_AGE_S = 24 * 3600
 
 # In production a request passes Traefik, then the front end's nginx. Each appends
 # the address it received the request from to X-Forwarded-For, so the visitor is
@@ -123,6 +129,7 @@ limiter = core.RateLimiter()
 _public_cache = {"at": 0.0, "payload": None, "built": -1, "version": 0}
 _weather_cache: dict = {}
 _weather_pending: set = set()
+_sea = {"key": None, "checked": None, "fetched": None, "body": None, "failures": 0, "pending": False}
 _background: set = set()
 _locks: dict = {}
 _admin_waiting = 0
@@ -135,6 +142,7 @@ def reset_runtime_state() -> None:
     limiter.reset()
     _weather_cache.clear()
     _weather_pending.clear()
+    _forget_sea(None)
     _locks.clear()
     _public_cache.update({"at": 0.0, "payload": None, "built": -1, "version": 0})
     _admin_waiting = 0
@@ -144,6 +152,12 @@ def reset_runtime_state() -> None:
 def _changed() -> None:
     """Something the public page shows has changed."""
     _public_cache["version"] += 1
+
+
+def _forget_sea(key) -> None:
+    _sea.update(
+        {"key": key, "checked": None, "fetched": None, "body": None, "failures": 0, "pending": False}
+    )
 
 
 def _lock(name: str) -> asyncio.Lock:
@@ -588,6 +602,77 @@ def _weather_for(lat: float, lon: float) -> Optional[dict]:
     return None
 
 
+async def _refresh_sea(grid: dict, key) -> None:
+    body = None
+    try:
+        forecast = await core.fetch_sea(grid)
+        if forecast:
+            body = json.dumps(
+                {
+                    "fetched": core.to_iso(int(time.time())),
+                    **grid,
+                    "interval_h": core.SEA_INTERVAL_H,
+                    **forecast,
+                },
+                separators=(",", ":"),
+            ).encode()
+    except Exception as error:
+        logger.warning("Sea forecast refresh failed: %s", error)
+    finally:
+        # The route may have been changed while the service was answering.
+        if _sea["key"] == key:
+            now = time.monotonic()
+            _sea["checked"] = now
+            _sea["pending"] = False
+            if body is None:
+                _sea["failures"] += 1
+            else:
+                _sea.update({"body": body, "fetched": now, "failures": 0})
+
+
+def _sea_is_fresh() -> bool:
+    if _sea["checked"] is None:
+        return False
+    wait = (
+        SEA_TTL_S
+        if _sea["failures"] == 0
+        else min(SEA_TTL_S, SEA_RETRY_S * 2 ** (_sea["failures"] - 1))
+    )
+    return time.monotonic() - _sea["checked"] < wait
+
+
+def _sea_in_hand() -> Optional[bytes]:
+    """The forecast last fetched, unless it is too old to be drawn as the days ahead."""
+    if _sea["body"] is not None and time.monotonic() - _sea["fetched"] < SEA_MAX_AGE_S:
+        return _sea["body"]
+    return None
+
+
+async def _sea_body(grid: dict) -> Optional[bytes]:
+    """The wave forecast for this grid, ready to send, fetched once for everyone.
+
+    While there is one in hand, a refresh happens in the background and nobody
+    waits for the service. With none in hand the first visitor waits for it, and
+    anyone arriving meanwhile waits for that same fetch.
+    """
+    key = tuple(grid[name] for name in ("south", "west", "step", "rows", "cols"))
+    if _sea["key"] != key:
+        _forget_sea(key)
+
+    if not _sea_is_fresh():
+        if _sea_in_hand() is not None:
+            if not _sea["pending"]:
+                _sea["pending"] = True
+                task = asyncio.create_task(_refresh_sea(grid, key))
+                _background.add(task)
+                task.add_done_callback(_background.discard)
+        else:
+            async with _lock("sea"):
+                if _sea["key"] == key and not _sea_is_fresh():
+                    await _refresh_sea(grid, key)
+    return _sea_in_hand() if _sea["key"] == key else None
+
+
 def _public_settings(main: dict) -> dict:
     return {
         "eyebrow": main.get("eyebrow", ""),
@@ -709,6 +794,25 @@ async def public_voyage(response: Response, db=Depends(get_db)):
             payload = await _build_public(db)
             _public_cache.update({"payload": payload, "built": version, "at": time.monotonic()})
         return _public_cache["payload"]
+
+
+@router.get("/sea")
+async def sea_forecast(db=Depends(get_db)):
+    """Waves over the ocean around the planned route, for the map's overlay."""
+    main = await db.voyage_settings.find_one({"_id": "main"})
+    grid = core.sea_grid(main.get("planned_route", [])) if main else None
+    arrived = main.get("arrived_ts") if main else None
+    if grid is None or (arrived is not None and arrived <= int(time.time())):
+        raise HTTPException(404, "There is no sea forecast for this voyage")
+
+    body = await _sea_body(grid)
+    if body is None:
+        raise HTTPException(503, "The sea forecast is not available right now")
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=900"},
+    )
 
 
 # --------------------------------------------------------------------------- admin
