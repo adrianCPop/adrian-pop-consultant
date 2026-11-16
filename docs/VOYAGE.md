@@ -10,8 +10,8 @@ without a connection, and a small admin page for whoever is ashore.
 | `/voyage/admin` | Shore contact | Voyage details, links, deleting, the pause switch. Behind one password. |
 
 None of them is linked from the site navigation, and the site's own top bar and
-chat bubble are left off them (`frontend/src/components/site/SiteLayout.tsx`,
-`frontend/src/lib/useCrewOnlyPage.ts`).
+chat bubble are left off them (`isVoyagePath` in `frontend/src/lib/voyagePaths.ts`,
+used by `frontend/src/components/site/SiteLayout.tsx` and `frontend/src/App.tsx`).
 
 Code: `backend/routes/voyage.py`, `backend/services/voyage_core.py`,
 `frontend/src/pages/site/Voyage*.tsx`, `frontend/src/lib/voyage*.ts`,

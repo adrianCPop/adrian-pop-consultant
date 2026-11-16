@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import SiteLayout from "@/components/site/SiteLayout";
@@ -15,6 +15,7 @@ import AIAdvisorPage from "@/pages/site/AIAdvisorPage";
 import ContactBookPage from "@/pages/site/ContactBookPage";
 import NotFound from "@/pages/NotFound";
 import ChatWidget from "@/components/ChatWidget";
+import { isVoyagePath } from "@/lib/voyagePaths";
 
 // The voyage pages bring a map and other code the rest of the site does not need,
 // so they are only downloaded when one of them is opened.
@@ -22,13 +23,21 @@ const VoyagePage = lazy(() => import("@/pages/site/VoyagePage"));
 const VoyageLogPage = lazy(() => import("@/pages/site/VoyageLogPage"));
 const VoyageAdminPage = lazy(() => import("@/pages/site/VoyageAdminPage"));
 
+/**
+ * The consulting site's chat bubble. Not on the voyage pages: it belongs to the
+ * consulting site, and on a phone it sits in the corner on top of their controls.
+ * Decided from the address, so it is never drawn there, not even while the page
+ * itself is still being downloaded.
+ */
+const SiteChat = () => (isVoyagePath(useLocation().pathname) ? null : <ChatWidget />);
+
 const App = () => {
   return (
     <>
       <Toaster />
       <Sonner />
-      <ChatWidget />
       <BrowserRouter>
+        <SiteChat />
         <Routes>
           <Route element={<SiteLayout />}>
             <Route path="/" element={<HomePage />} />

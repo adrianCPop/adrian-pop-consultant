@@ -35,7 +35,6 @@ import {
   type SeaLayerName,
   type SeaSample,
 } from "@/lib/seaField";
-import { useWithoutSiteChat } from "@/lib/useCrewOnlyPage";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import {
   ApiError,
@@ -220,7 +219,6 @@ interface Loaded {
 }
 
 const VoyagePage = () => {
-  useWithoutSiteChat();
   const texts = useVoyageTexts();
   const { t, rich, dayMonth, fullDate, clock, miles, knots, compass, coord } = texts;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
