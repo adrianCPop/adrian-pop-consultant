@@ -573,7 +573,7 @@ const VoyageAdminPage = () => {
                   [t("admin.password"), issued.key],
                 ].map(([label, value]) => (
                   <div key={label} className="flex flex-wrap items-center gap-2">
-                    <span className="w-20 text-xs uppercase tracking-[0.1em] text-muted-foreground">{label}</span>
+                    <span className="w-24 text-xs uppercase tracking-[0.1em] text-muted-foreground">{label}</span>
                     <code className="min-w-0 flex-1 break-all rounded-lg bg-secondary/60 px-3 py-2 text-xs text-foreground">{value}</code>
                     <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={() => void copy(value)} aria-label={t("admin.tracker.copy", { what: label })}>
                       <Copy className="h-3.5 w-3.5" />

@@ -22,8 +22,12 @@ const SiteLayout = () => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [location.hash, location.pathname]);
 
-  // The voyage pages stand on their own: the consulting site's navigation is left off them.
-  const onVoyage = location.pathname === "/voyage" || location.pathname.startsWith("/voyage/");
+  // The voyage pages stand on their own: the consulting site's navigation is left off
+  // them. Only those three pages (the router matches them in any letter case), so a
+  // mistyped address under /voyage/ still gets the site's "not found" page whole.
+  const onVoyage = ["/voyage", "/voyage/log", "/voyage/admin"].includes(
+    location.pathname.toLowerCase().replace(/\/+$/, "")
+  );
 
   return (
     <div className="site-shell min-h-screen bg-background text-foreground">

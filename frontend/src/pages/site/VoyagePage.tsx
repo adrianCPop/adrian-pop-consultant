@@ -631,7 +631,7 @@ const VoyagePage = () => {
             <span aria-hidden="true">·</span>
             <span>
               {t("public.status.atSea", {
-                duration: texts.duration((arrival - departure) / 3_600_000),
+                duration: texts.durationLong((arrival - departure) / 3_600_000),
               })}
             </span>
           </>

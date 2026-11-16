@@ -538,6 +538,59 @@ def test_a_voyage_saved_without_romanian_names_has_none(ctx):
     assert voyage["origin"] == {"name": "Las Palmas", "name_ro": "", "lat": 28.13, "lon": -15.43}
 
 
+def test_a_save_from_an_older_admin_page_keeps_the_romanian_names(ctx):
+    ctx.configure(
+        eyebrow_ro="Traversarea Atlanticului",
+        origin={"name": "Las Palmas", "name_ro": "Las Palmas (Gran Canaria)", "lat": 28.13, "lon": -15.43},
+        destination={"name": "Caribbean", "name_ro": "Caraibe", "lat": 14.08, "lon": -60.95},
+    )
+
+    # A tab left open since before these fields existed saves the arrival time: its
+    # request names neither the Romanian heading nor the Romanian port names.
+    ctx.configure(
+        departure_h=-96,
+        arrived_at=iso(NOW - HOUR),
+        destination={"name": "Caribbean", "lat": 14.08, "lon": -60.95},
+    )
+    voyage = ctx.public()["voyage"]
+    assert voyage["arrived_at"] is not None
+    assert voyage["eyebrow_ro"] == "Traversarea Atlanticului"
+    assert voyage["destination"]["name_ro"] == "Caraibe"
+
+
+def test_an_older_admin_page_that_renames_a_port_drops_that_ports_romanian_name(ctx):
+    ctx.configure(
+        eyebrow_ro="Traversarea Atlanticului",
+        origin={"name": "Las Palmas", "name_ro": "Las Palmas (Gran Canaria)", "lat": 28.13, "lon": -15.43},
+        destination={"name": "Caribbean", "name_ro": "Caraibe", "lat": 14.08, "lon": -60.95},
+    )
+
+    # The Romanian name described the old one; shown beside "Martinique" it would be wrong.
+    ctx.configure(
+        eyebrow="Atlantic crossing 2026",
+        origin={"name": "Las Palmas", "lat": 28.13, "lon": -15.43},
+        destination={"name": "Martinique", "lat": 14.6, "lon": -61.07},
+    )
+    voyage = ctx.public()["voyage"]
+    assert voyage["destination"] == {"name": "Martinique", "name_ro": "", "lat": 14.6, "lon": -61.07}
+    assert voyage["origin"]["name_ro"] == "Las Palmas (Gran Canaria)"
+    assert voyage["eyebrow_ro"] == ""
+
+
+def test_the_admin_page_can_clear_a_romanian_name(ctx):
+    ctx.configure(
+        eyebrow_ro="Traversarea Atlanticului",
+        destination={"name": "Caribbean", "name_ro": "Caraibe", "lat": 14.08, "lon": -60.95},
+    )
+    ctx.configure(
+        eyebrow_ro="",
+        destination={"name": "Caribbean", "name_ro": "", "lat": 14.08, "lon": -60.95},
+    )
+    voyage = ctx.public()["voyage"]
+    assert voyage["eyebrow_ro"] == ""
+    assert voyage["destination"]["name_ro"] == ""
+
+
 def test_a_voyage_stored_before_romanian_names_existed_is_still_published():
     stored = {
         "eyebrow": "Atlantic crossing",

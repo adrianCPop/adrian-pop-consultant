@@ -10,8 +10,12 @@ export type VoyageLanguage = "EN" | "RO";
 
 export const LANGUAGES: VoyageLanguage[] = ["EN", "RO"];
 
-/** The same key and values as the site's older language switch, so one choice serves both. */
-export const LANGUAGE_STORE = "language";
+/**
+ * Where a visitor's choice is kept on their device. Not the key "language": the
+ * site's older switch wrote "EN" there for every visitor without being asked, so
+ * finding it says nothing about what the visitor wants.
+ */
+export const LANGUAGE_STORE = "voyage-language";
 
 /** What each language calls itself. */
 export const LANGUAGE_NAMES: Record<VoyageLanguage, string> = { EN: "English", RO: "Română" };
@@ -77,26 +81,40 @@ export const translate = (language: VoyageLanguage, key: MessageKey, params: Par
 export type MessagePart = string | { slot: string };
 
 /**
- * A message cut at its placeholders, for a sentence in which the page draws
- * one part itself (a link, a figure in bold).
+ * A message cut at the placeholders the page draws itself (a link, a figure in
+ * bold). Placeholders that `params` has a value for are filled in as text.
  */
-const messageParts = (language: VoyageLanguage, key: MessageKey, params: Params): MessagePart[] =>
-  template(language, key, params)
-    .split(/(\{\w+\})/)
-    .filter((piece) => piece !== "")
-    .map((piece) => {
-      const slot = /^\{(\w+)\}$/.exec(piece);
-      return slot ? { slot: slot[1] } : piece;
-    });
+const messageParts = (language: VoyageLanguage, key: MessageKey, params: Params): MessagePart[] => {
+  const parts: MessagePart[] = [];
+  const addText = (text: string) => {
+    const last = parts[parts.length - 1];
+    if (typeof last === "string") {
+      parts[parts.length - 1] = last + text;
+    } else if (text !== "") {
+      parts.push(text);
+    }
+  };
+  for (const piece of template(language, key, params).split(/(\{\w+\})/)) {
+    const name = /^\{(\w+)\}$/.exec(piece)?.[1];
+    if (name === undefined) {
+      addText(piece);
+    } else if (name in params) {
+      addText(String(params[name]));
+    } else {
+      parts.push({ slot: name });
+    }
+  }
+  return parts;
+};
 
 /** What the server said, in the page's language. Unknown sentences pass through. */
 export const serverText = (language: VoyageLanguage, message: string): string => {
   if (language === "EN") {
     return message;
   }
-  const known = SERVER_TEXT_RO[message];
-  if (known) {
-    return known;
+  // Looked up as its own entry only: "constructor" is not a sentence of the server's.
+  if (Object.prototype.hasOwnProperty.call(SERVER_TEXT_RO, message)) {
+    return SERVER_TEXT_RO[message];
   }
   // Written by the page itself, in `voyageApi.ts`, when the server gave no sentence.
   const status = /^The server answered (\d+)$/.exec(message);
@@ -114,11 +132,11 @@ export const outboxErrorText = (language: VoyageLanguage, stored: string): strin
   if (stored === MESSAGES.EN["outbox.onePhoto"]) {
     return translate(language, "outbox.onePhoto");
   }
-  const refused = /^Not accepted: (.+)$/s.exec(stored);
+  const refused = /^Not accepted: (.+)$/.exec(stored);
   if (refused) {
     return translate(language, "outbox.notAccepted", { reason: serverText(language, refused[1]) });
   }
-  const retried = /^Server: (.+)\. It will be tried again\.$/s.exec(stored);
+  const retried = /^Server: (.+)\. It will be tried again\.$/.exec(stored);
   if (retried) {
     return translate(language, "outbox.retry", { message: serverText(language, retried[1]) });
   }
@@ -144,7 +162,8 @@ export const makeTexts = (language: VoyageLanguage) => {
     date(time, { timeZone: "UTC", ...options });
 
   /** A compass point as this language writes it: Romanian has V (vest) for W. */
-  const point = (english: string) => (language === "RO" ? english.replace(/W/g, "V") : english);
+  const point = (english: string) =>
+    language === "RO" && typeof english === "string" ? english.replace(/W/g, "V") : english;
 
   return {
     language,
@@ -188,11 +207,20 @@ export const makeTexts = (language: VoyageLanguage) => {
       }
       return t("span.days", { count: Math.floor(hours / 24) });
     },
-    /** Time at sea, in days and hours. */
+    /** Time at sea, in days and hours, for a tight spot: "9 d 2 h". */
     duration: (hours: number) => {
       const days = Math.floor(hours / 24);
       const rest = Math.floor(hours - days * 24);
       return rest === 0 ? t("duration.days", { days }) : t("duration.daysHours", { days, hours: rest });
+    },
+    /** The same where there is room. English keeps "9 d 2 h"; Romanian spells it out. */
+    durationLong: (hours: number) => {
+      const days = Math.floor(hours / 24);
+      const rest = Math.floor(hours - days * 24);
+      const daysText = t("durationLong.days", { count: days });
+      return rest === 0
+        ? daysText
+        : t("durationLong.both", { days: daysText, hours: t("durationLong.hours", { count: rest }) });
     },
 
     /**

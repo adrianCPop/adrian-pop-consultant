@@ -101,7 +101,7 @@ describe("the two sets of texts", () => {
 describe("translate", () => {
   it("puts the values in", () => {
     expect(translate("EN", "public.entry.writtenBy", { author: "Ioana" })).toBe("Written by Ioana");
-    expect(translate("RO", "public.entry.writtenBy", { author: "Ioana" })).toBe("Scris de Ioana");
+    expect(translate("RO", "public.entry.writtenBy", { author: "Ioana" })).toBe("Scrisă de Ioana");
   });
 
   it("does not read a value as a template", () => {
@@ -146,6 +146,21 @@ describe("figures, dates and directions in each language", () => {
     expect(english.number(7, 1)).toBe("7.0");
   });
 
+  it("rounds to the nearest, up as well as down", () => {
+    expect(english.number(3016.6)).toBe("3,017");
+    expect(english.number(0.5)).toBe("1");
+    expect(english.number(5.26, 1)).toBe("5.3");
+    expect(romanian.number(5.26, 1)).toBe("5,3");
+    expect(english.knots(5.26)).toBe("5.3 kn");
+  });
+
+  it("never writes a minus in front of a zero", () => {
+    expect(english.number(-0.4)).toBe("0");
+    expect(english.number(-0.04, 1)).toBe("0.0");
+    expect(romanian.number(-0.04, 1)).toBe("0,0");
+    expect(english.number(-0.6)).toBe("-1");
+  });
+
   it("puts the unit after the figure", () => {
     expect(english.miles(3016.4)).toBe("3,016 nm");
     expect(romanian.miles(3016.4)).toBe("3.016 Mm");
@@ -160,8 +175,43 @@ describe("figures, dates and directions in each language", () => {
     expect(romanian.fullDate(morning)).toBe("20 noiembrie 2026");
     expect(english.clock(morning)).toBe("09:05 UTC");
     expect(romanian.clock(morning)).toBe("09:05 UTC");
-    // Close to midnight UTC the date must not slip to the device's own day.
-    expect(romanian.dayMonth(Date.parse("2026-11-20T23:59:00Z"))).toBe("20 nov.");
+  });
+
+  it("keeps to UTC whatever the device's own time zone is", () => {
+    const late = Date.parse("2026-11-20T23:59:00Z");
+    const zone = process.env.TZ;
+    try {
+      for (const elsewhere of ["Pacific/Auckland", "America/Los_Angeles"]) {
+        process.env.TZ = elsewhere;
+        expect(english.dayMonth(late)).toBe("20 Nov");
+        expect(romanian.fullDate(late)).toBe("20 noiembrie 2026");
+        expect(english.clock(late)).toBe("23:59 UTC");
+        expect(english.stamp(late)).toBe("20 Nov, 23:59 UTC");
+      }
+    } finally {
+      if (zone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = zone;
+      }
+    }
+  });
+
+  it("stamps a moment with its day and time: UTC for the shore, the device's own for the crew", () => {
+    expect(english.stamp(morning)).toBe("20 Nov, 09:05 UTC");
+    expect(romanian.stamp(morning)).toBe("20 nov., 09:05 UTC");
+    const zone = process.env.TZ;
+    try {
+      process.env.TZ = "Atlantic/Cape_Verde"; // one hour behind UTC, all year
+      expect(english.localStamp(morning)).toBe("20 Nov, 08:05");
+      expect(romanian.localStamp("2026-11-20T09:05:00Z")).toBe("20 nov., 08:05");
+    } finally {
+      if (zone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = zone;
+      }
+    }
   });
 
   it("names west V in Romanian, in compass points and in positions", () => {
@@ -188,11 +238,32 @@ describe("figures, dates and directions in each language", () => {
     expect(english.span(-5)).toBe("0 min");
   });
 
-  it("gives the time at sea in days and hours", () => {
+  it("counts in hours up to two days, and in whole days after that", () => {
+    expect(english.span(59.4 * 60_000)).toBe("59 min");
+    expect(english.span(60 * 60_000)).toBe("1 h");
+    expect(english.span(30 * 3_600_000)).toBe("30 h");
+    expect(english.span(47 * 3_600_000 + 59 * 60_000)).toBe("47 h 59 min");
+    expect(english.span(48 * 3_600_000)).toBe("2 days");
+    expect(english.span(71 * 3_600_000)).toBe("2 days");
+    expect(romanian.span(48 * 3_600_000)).toBe("2 zile");
+  });
+
+  it("gives the time at sea in days and hours, never more than has passed", () => {
     expect(english.duration(29)).toBe("1 d 5 h");
+    expect(english.duration(29.9)).toBe("1 d 5 h");
     expect(english.duration(48)).toBe("2 d");
+    expect(english.duration(47.9)).toBe("1 d 23 h");
     expect(romanian.duration(29)).toBe("1 z 5 h");
     expect(romanian.duration(48)).toBe("2 z");
+  });
+
+  it("spells the time at sea out in Romanian where there is room", () => {
+    expect(english.durationLong(29.9)).toBe("1 d 5 h");
+    expect(english.durationLong(48)).toBe("2 d");
+    expect(romanian.durationLong(29.9)).toBe("1 zi și 5 ore");
+    expect(romanian.durationLong(48)).toBe("2 zile");
+    expect(romanian.durationLong(25)).toBe("1 zi și 1 oră");
+    expect(romanian.durationLong(20 * 24 + 21)).toBe("20 de zile și 21 de ore");
   });
 
   it("uses the Romanian name of a place when there is one", () => {
@@ -211,36 +282,61 @@ describe("figures, dates and directions in each language", () => {
       ".",
     ]);
   });
+
+  it("fills in the values it is given and leaves the rest for the page to draw", () => {
+    expect(english.parts("public.status.leavingAt", { time: "10:00 UTC" })).toEqual([
+      "10:00 UTC · in ",
+      { slot: "span" },
+    ]);
+    expect(english.parts("public.status.leavingAt", { time: "10:00 UTC", span: "2 days" })).toEqual([
+      "10:00 UTC · in 2 days",
+    ]);
+    // A plural message takes its form from the count, which is also written in.
+    expect(romanian.parts("common.photos", { count: 20 })).toEqual(["20 de fotografii"]);
+  });
+
+  it("writes a compass point that is missing as it came, in either language", () => {
+    const missing = undefined as unknown as string;
+    expect(romanian.point(missing)).toBe(english.point(missing));
+  });
 });
 
 describe("messages that come from the server", () => {
   const source = ["routes/voyage.py", "services/voyage_core.py"]
     .map((file) => readFileSync(new URL(`../../../backend/${file}`, import.meta.url), "utf8"))
     .join("\n");
+  // Every sentence the server can put in front of a person, in either kind of quotes.
+  const quoted = String.raw`(["'])((?:(?!\1).)+)\1`;
   const fixed = [
-    ...source.matchAll(/HTTPException\(\s*\d+,\s*"([^"]+)"/g),
-    ...source.matchAll(/Image(?:Rejected|Busy)\(\s*"([^"]+)"/g),
-    ...source.matchAll(/return False, "([^"]+)"/g),
-  ].map((hit) => hit[1]);
+    ...source.matchAll(new RegExp(String.raw`HTTPException\(\s*\d+,\s*` + quoted, "g")),
+    ...source.matchAll(new RegExp(String.raw`["']detail["']:\s*` + quoted, "g")),
+    ...source.matchAll(new RegExp(String.raw`Image(?:Rejected|Busy)\(\s*` + quoted, "g")),
+    ...source.matchAll(new RegExp(String.raw`return False,\s*` + quoted, "g")),
+  ].map((hit) => hit[2]);
 
   it("finds the server's messages in its source", () => {
     expect(fixed.length).toBeGreaterThan(30);
     expect(fixed).toContain("Wrong password");
     expect(fixed).toContain("that position is too old");
     expect(fixed).toContain("This file is not a readable photo");
+    // Sent with the list of photos still missing, not as an ordinary error.
+    expect(fixed).toContain("Some photos have not arrived yet");
   });
 
   it("has a Romanian text for every one of them", () => {
     expect(fixed.filter((message) => serverText("RO", message) === message)).toEqual([]);
   });
 
-  it("covers the two messages the server puts a field name into", () => {
+  it("covers the messages the server puts a field name into", () => {
     expect(source).toContain('f"{label} is not a valid date and time"');
+    const labels = [...source.matchAll(/_optional_time\([^,]+,\s*"(\w+)"\)/g)].map((hit) => hit[1]);
+    expect(labels.sort()).toEqual(["Arrival", "Departure"]);
+    for (const label of labels) {
+      const sentence = `${label} is not a valid date and time`;
+      expect(serverText("RO", sentence)).not.toBe(sentence);
+    }
     expect(serverText("RO", "Departure is not a valid date and time")).toBe(
-      "Plecarea nu este o dată și o oră valide"
-    );
-    expect(serverText("RO", "Arrival is not a valid date and time")).toBe(
-      "Sosirea nu este o dată și o oră valide"
+      "Data și ora plecării nu sunt valide"
     );
   });
 
@@ -248,16 +344,28 @@ describe("messages that come from the server", () => {
     expect(serverText("EN", "Wrong password")).toBe("Wrong password");
     expect(serverText("RO", "Wrong password")).toBe("Parolă greșită");
     expect(serverText("RO", "Something new")).toBe("Something new");
-    expect(serverText("RO", "The server answered 502")).toBe("Serverul a răspuns 502");
+    expect(serverText("RO", "The server answered 502")).toBe("Serverul a răspuns cu codul 502");
+    // Words every object answers to are not sentences of the server's.
+    expect(serverText("RO", "constructor")).toBe("constructor");
+    expect(serverText("RO", "toString")).toBe("toString");
   });
 
   it("translates what the outbox keeps about an entry that did not go", () => {
     const cases: [string, string][] = [
       ["One photo could not be sent", "O fotografie nu a putut fi trimisă"],
-      ["Not accepted: that position is too old", "Neacceptat: poziția este prea veche"],
+      ["Not accepted: that position is too old", "Neacceptată: poziția este prea veche"],
       [
         "Server: Photo storage is full. It will be tried again.",
-        "Server: Spațiul pentru fotografii este plin. Se încearcă din nou.",
+        "Server: Spațiul pentru fotografii este plin. Se va încerca din nou.",
+      ],
+      // The server's own sentence ends in a full stop, and one the page made up.
+      [
+        "Server: Sign-in is busy. Try again in a moment.. It will be tried again.",
+        "Server: Sunt prea multe autentificări în același timp. Încearcă din nou peste câteva momente.. Se va încerca din nou.",
+      ],
+      [
+        "Server: The server answered 503. It will be tried again.",
+        "Server: Serverul a răspuns cu codul 503. Se va încerca din nou.",
       ],
       ["Too many entries in an hour", "Prea multe însemnări într-o oră"],
     ];

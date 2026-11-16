@@ -31,7 +31,8 @@ All three pages come in both languages, with an EN / RO switch at the top.
   the server's source and fails when a sentence has no Romanian text.
 - What people type is shown as typed: entries, names of crew. The exceptions are
   the small heading and the two port names, which have an optional Romanian
-  version in the admin page.
+  version in the admin page. A save from an admin page that was loaded before
+  these existed leaves them as they are, unless it changes the text they translate.
 - To add a text: add the key to both languages in `voyageMessages.ts`, then use
   `t("the.key")`. `cd frontend && npm test` checks that the two sets match.
 
@@ -110,6 +111,10 @@ Notes:
   background.
 - Phones can attach their own GPS position (switch in the form). Laptops and most
   tablets cannot, so their entries are placed where the track says the boat was.
+- When a new version of the site is published, a device goes on opening the version
+  it has saved until it opens the log once on a connection quick enough to load the
+  new one (three seconds for the page). It never keeps half of each, so the log
+  opens with the dish off either way.
 
 ## The tracking phone
 

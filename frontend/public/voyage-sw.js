@@ -44,6 +44,13 @@ const saveIfMissing = async (cache, url) => {
  * The page lists the files it loaded. They are saved first; the page itself is
  * saved only once everything it refers to is saved too, so the copy kept for
  * offline use is never a page whose scripts are missing.
+ *
+ * And only when the page that sent the list is the same build as the page now on
+ * the server. After a new version is published, a visit answered from the saved
+ * copy (slow connection) comes from the old build: its list says nothing about
+ * the new build's files, most of which the new page loads only once it runs. Saving
+ * the new page then would leave a page whose scripts are missing. The old copy is
+ * kept whole instead, until a visit that really loads the new page sends its own list.
  */
 self.addEventListener("message", (event) => {
   if (!event.data || event.data.type !== "precache" || !Array.isArray(event.data.urls)) {
@@ -63,6 +70,12 @@ self.addEventListener("message", (event) => {
       }
       const html = await shell.clone().text();
       const referred = [...html.matchAll(/["'](\/assets\/[^"']+)["']/g)].map((match) => match[1]);
+      const loadedByThisPage = new Set(
+        listed.map((url) => new URL(url, self.location.origin).pathname)
+      );
+      if (!referred.every((url) => loadedByThisPage.has(url))) {
+        return;
+      }
       const complete = await Promise.all(referred.map((url) => saveIfMissing(cache, url)));
       if (saved.every(Boolean) && complete.every(Boolean)) {
         await cache.put(SHELL, shell);
