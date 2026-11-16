@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 
 /**
- * For the crew log and the admin page: keep them out of search results, and hide
- * the site's chat bubble, which would otherwise sit on top of the form on a phone.
+ * For the crew log and the admin page: keep them out of search results for as
+ * long as they are shown. (The site's chat bubble is left off every voyage page
+ * where it is mounted, in `App.tsx`.)
  */
 export const useCrewOnlyPage = () => {
   useEffect(() => {
@@ -17,20 +18,11 @@ export const useCrewOnlyPage = () => {
     const previousRobots = robots.content;
     robots.content = "noindex, nofollow";
 
-    const chat = document.querySelector<HTMLElement>("[data-site-chat]");
-    const previousDisplay = chat?.style.display ?? "";
-    if (chat) {
-      chat.style.display = "none";
-    }
-
     return () => {
       if (created) {
         robots?.remove();
       } else if (robots) {
         robots.content = previousRobots;
-      }
-      if (chat) {
-        chat.style.display = previousDisplay;
       }
     };
   }, []);
