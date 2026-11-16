@@ -1,9 +1,9 @@
 import L from "leaflet";
-import type { LatLon } from "@/lib/geo";
 import {
   arrowStride,
   paintSea,
   sampleSea,
+  scaleTop,
   seaArrows,
   seaBounds,
   type SeaForecast,
@@ -11,16 +11,60 @@ import {
 } from "@/lib/seaField";
 
 /**
- * The wave forecast as a layer of the voyage map: a picture of the wave height
- * laid over the ocean, arrows for the way the waves run, and the figures for a
- * spot when the sea is clicked. It sits above the map tiles and below the
- * route, the track and the pins.
+ * A forecast (waves or wind) as a layer of the voyage map: a picture laid over
+ * the ocean in the layer's colours, arrows for the way the waves run or the
+ * wind blows, and the figures for a spot when it is clicked. It sits above the
+ * map tiles and below the route, the track and the pins.
  */
 
 /** How finely the picture is painted: pixels per grid step. The browser smooths it when it is stretched. */
 const PIXELS_PER_STEP = 14;
+/** Arrows are drawn for the part of the map in view and this much around it. */
+const VIEW_MARGIN = 0.15;
+/** A click this close to the top of the map gets its figures below it, where there is room. */
+const ROOM_ABOVE_PX = 120;
 
 const mercatorY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+
+/**
+ * Each time step of a forecast is painted once and kept for as long as the
+ * forecast is: going back to a step, switching the layer off and on, or the map
+ * being rebuilt costs nothing.
+ */
+const painted = new WeakMap<SeaForecast, Map<number, string>>();
+/** The spot whose figures are shown. Kept here so that it outlives a rebuilt map. */
+let readoutAt: { lat: number; lng: number } | null = null;
+
+const paint = (forecast: SeaForecast, step: number): string | null => {
+  let steps = painted.get(forecast);
+  if (!steps) {
+    steps = new Map();
+    painted.set(forecast, steps);
+  }
+  const ready = steps.get(step);
+  if (ready) {
+    return ready;
+  }
+  const { south, west, north, east } = seaBounds(forecast);
+  const width = Math.max(2, (forecast.cols - 1) * PIXELS_PER_STEP);
+  const height = Math.max(
+    2,
+    Math.round((width * (mercatorY(north) - mercatorY(south))) / (((east - west) * Math.PI) / 180))
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+  const pixels = context.createImageData(width, height);
+  pixels.data.set(paintSea(forecast, step, width, height));
+  context.putImageData(pixels, 0, 0);
+  const url = canvas.toDataURL("image/png");
+  steps.set(step, url);
+  return url;
+};
 
 export interface SeaLayer {
   /** Draw this time step of the forecast, or change to it. */
@@ -33,7 +77,7 @@ export interface SeaLayer {
 export const createSeaLayer = (
   map: L.Map,
   /** The figures for a spot, in words, in the page's language. */
-  describe: (sample: SeaSample, pos: LatLon) => string
+  describe: (sample: SeaSample, forecast: SeaForecast) => string
 ): SeaLayer => {
   const fieldPane = map.createPane("voyage-sea");
   fieldPane.style.zIndex = "350";
@@ -42,7 +86,6 @@ export const createSeaLayer = (
   arrowPane.style.zIndex = "360";
   arrowPane.style.pointerEvents = "none";
 
-  const canvas = document.createElement("canvas");
   const arrows = L.layerGroup();
   const readout = L.tooltip({
     permanent: true,
@@ -52,53 +95,32 @@ export const createSeaLayer = (
   });
   let picture: L.ImageOverlay | null = null;
   let shown: { forecast: SeaForecast; step: number } | null = null;
-  let readoutAt: L.LatLng | null = null;
-  /** Each time step is painted once; going back to it costs nothing. */
-  let painted = new Map<number, string>();
-
-  const paint = (forecast: SeaForecast, step: number): string | null => {
-    const ready = painted.get(step);
-    if (ready) {
-      return ready;
-    }
-    const { south, west, north, east } = seaBounds(forecast);
-    const width = Math.max(2, (forecast.cols - 1) * PIXELS_PER_STEP);
-    const height = Math.max(
-      2,
-      Math.round((width * (mercatorY(north) - mercatorY(south))) / (((east - west) * Math.PI) / 180))
-    );
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return null;
-    }
-    const pixels = context.createImageData(width, height);
-    pixels.data.set(paintSea(forecast, step, width, height));
-    context.putImageData(pixels, 0, 0);
-    const url = canvas.toDataURL("image/png");
-    painted.set(step, url);
-    return url;
-  };
 
   const drawArrows = () => {
     arrows.clearLayers();
     if (!shown) {
       return;
     }
-    const stride = arrowStride(shown.forecast.step, map.getZoom());
-    for (const arrow of seaArrows(shown.forecast, shown.step, stride)) {
-      // Longer arrows for higher waves, within reason.
-      const size = Math.round(11 + Math.min(9, arrow.heightM * 2.2));
+    const { forecast, step } = shown;
+    const view = map.getBounds().pad(VIEW_MARGIN);
+    const top = scaleTop(forecast.layer);
+    for (const arrow of seaArrows(forecast, step, arrowStride(forecast.step, map.getZoom()))) {
+      if (!view.contains(arrow.pos)) {
+        continue;
+      }
+      // Longer arrows for more of it, within reason.
+      const size = Math.round(11 + Math.min(9, (arrow.value / top) * 40));
+      const shaft = "M12 21V4M6.5 9.5 12 4l5.5 5.5";
       L.marker(arrow.pos, {
         pane: "voyage-sea-arrows",
         interactive: false,
         keyboard: false,
         icon: L.divIcon({
           className: "voyage-sea-arrow",
+          // Drawn twice, dark under light, so it reads on any of the scale's colours.
           html: `<svg viewBox="0 0 24 24" style="transform: rotate(${Math.round(
             arrow.towardDeg
-          )}deg)" aria-hidden="true"><path d="M12 21V4M6.5 9.5 12 4l5.5 5.5"/></svg>`,
+          )}deg)" aria-hidden="true"><path class="voyage-sea-arrow__edge" d="${shaft}"/><path d="${shaft}"/></svg>`,
           iconSize: [size, size],
           iconAnchor: [size / 2, size / 2],
         }),
@@ -118,7 +140,10 @@ export const createSeaLayer = (
     }
     // Leaflet treats a string as HTML, so hand it an element with plain text.
     const text = document.createElement("span");
-    text.textContent = describe(sample, [readoutAt.lat, readoutAt.lng]);
+    text.textContent = describe(sample, shown.forecast);
+    const below = map.latLngToContainerPoint(readoutAt).y < ROOM_ABOVE_PX;
+    readout.options.direction = below ? "bottom" : "top";
+    readout.options.offset = L.point(0, below ? 6 : -6);
     readout.setLatLng(readoutAt).setContent(text);
     if (!map.hasLayer(readout)) {
       readout.addTo(map);
@@ -129,16 +154,17 @@ export const createSeaLayer = (
     if (!shown) {
       return;
     }
-    readoutAt = event.latlng;
+    readoutAt = { lat: event.latlng.lat, lng: event.latlng.lng };
     writeReadout();
   };
 
-  map.on("zoomend", drawArrows);
+  // Also fires at the end of a zoom.
+  map.on("moveend", drawArrows);
   map.on("click", onClick);
 
-  const hide = () => {
+  /** Off the map, but the spot being read is remembered for when the layer comes back. */
+  const clear = () => {
     shown = null;
-    readoutAt = null;
     readout.remove();
     arrows.clearLayers();
     arrows.remove();
@@ -147,16 +173,9 @@ export const createSeaLayer = (
 
   return {
     show: (forecast, step) => {
-      if (step < 0 || step >= forecast.times.length) {
-        hide();
-        return;
-      }
-      if (!shown || shown.forecast !== forecast) {
-        painted = new Map();
-      }
-      const url = paint(forecast, step);
+      const url = step >= 0 && step < forecast.times.length ? paint(forecast, step) : null;
       if (!url) {
-        hide();
+        clear();
         return;
       }
       const { south, west, north, east } = seaBounds(forecast);
@@ -181,10 +200,14 @@ export const createSeaLayer = (
       drawArrows();
       writeReadout();
     },
-    hide,
+    hide: () => {
+      clear();
+      // Switched off by the visitor: the spot is forgotten with it.
+      readoutAt = null;
+    },
     remove: () => {
-      hide();
-      map.off("zoomend", drawArrows);
+      clear();
+      map.off("moveend", drawArrows);
       map.off("click", onClick);
       picture = null;
     },

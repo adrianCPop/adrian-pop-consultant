@@ -1,6 +1,6 @@
 /** Client for the voyage tracker API (backend/routes/voyage.py). */
 import type { LatLon } from "@/lib/geo";
-import type { SeaForecast } from "@/lib/seaField";
+import type { SeaForecast, SeaLayerName } from "@/lib/seaField";
 
 export interface VoyagePort {
   name: string;
@@ -61,6 +61,8 @@ export interface VoyageData {
   track: [number, number, number][];
   entries: VoyageEntry[];
   weather: VoyageWeather | null;
+  /** Whether there are forecasts to lay over the map (waves, wind). */
+  sea?: boolean;
 }
 
 export interface CrewIdentity {
@@ -166,8 +168,13 @@ export const photoUrl = (id: string, size: "thumb" | "full" = "full") =>
 
 export const fetchVoyage = () => request<VoyageData>("");
 
-/** Waves over the ocean around the planned route, for the map's overlay. */
-export const fetchSea = () => request<SeaForecast>("/sea", {}, 30_000);
+/**
+ * Waves or wind over the ocean around the planned route, for the map's overlay.
+ * When the server answers 503 with `retry_in` in the body, the forecast is on
+ * its way and worth asking for again after that many seconds.
+ */
+export const fetchSea = (layer: SeaLayerName) =>
+  request<SeaForecast>(`/sea?layer=${layer}`, {}, 30_000);
 
 // ---- crew (secret link)
 

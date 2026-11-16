@@ -57,10 +57,10 @@ interface VoyageMapProps {
    */
   viewRef?: MutableRefObject<MapView | null>;
   onSelect: (id: string) => void;
-  /** The wave forecast to lay over the sea, and which of its time steps. Null or left out: none. */
+  /** The forecast (waves or wind) to lay over the sea, and which of its time steps. Null or left out: none. */
   sea?: { forecast: SeaForecast; step: number } | null;
-  /** The figures for a spot of sea that was clicked, in words. */
-  describeSea?: (sample: SeaSample) => string;
+  /** The figures for a spot that was clicked, in words. */
+  describeSea?: (sample: SeaSample, forecast: SeaForecast) => string;
   /** The map's own words, in the page's language. English when left out. */
   text?: Partial<MapText>;
   className?: string;
@@ -155,7 +155,10 @@ const VoyageMap = ({
       maxZoom: 10,
     });
     mapRef.current = map;
-    seaLayerRef.current = createSeaLayer(map, (sample) => describeSeaRef.current?.(sample) ?? "");
+    seaLayerRef.current = createSeaLayer(
+      map,
+      (sample, forecast) => describeSeaRef.current?.(sample, forecast) ?? ""
+    );
     map.attributionControl.setPrefix(false);
     L.control
       .zoom({ position: "bottomright", zoomInTitle: words.zoomIn, zoomOutTitle: words.zoomOut })

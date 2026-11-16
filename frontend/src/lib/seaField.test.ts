@@ -1,32 +1,50 @@
 import { describe, expect, it } from "vitest";
 import {
   arrowStride,
-  heightColor,
   nearestStep,
   paintSea,
   sampleSea,
+  scaleTop,
   seaArrows,
   seaBounds,
+  seaColor,
+  seaMax,
+  SEA_SCALES,
   type SeaForecast,
 } from "@/lib/seaField";
 
-/** A 3 x 3 grid from 10 N 30 W to 14 N 26 W, two degrees apart, with two time steps. */
-const sea = (height: (number | null)[], direction?: (number | null)[]): SeaForecast => ({
+/**
+ * A wave forecast on a grid from 10 N 30 W, two degrees apart, with two time
+ * steps. `height` is in tenths of a metre, row by row from the south-west.
+ */
+const waves = (
+  height: (number | null)[],
+  { cols = 3, direction }: { cols?: number; direction?: (number | null)[] } = {}
+): SeaForecast => ({
+  layer: "waves",
   fetched: "2026-11-16T18:10:00Z",
   south: 10,
   west: -30,
   step: 2,
-  rows: 3,
-  cols: 3,
+  rows: height.length / cols,
+  cols,
   interval_h: 6,
+  scale: 10,
   times: ["2026-11-16T18:00:00Z", "2026-11-17T00:00:00Z"],
-  height: [height, height.map((value) => (value === null ? null : value + 10))],
+  value: [height, height.map((value) => (value === null ? null : value + 10))],
   direction: [direction ?? height.map((value) => (value === null ? null : 90)), height.map(() => 270)],
-  period: [height.map((value) => (value === null ? null : 8)), height.map(() => 9)],
+  extra: [height.map((value) => (value === null ? null : 8)), height.map(() => 9)],
 });
 
-// Row by row from the south-west: the south row first.
-const flat = sea([10, 10, 10, 20, 20, 20, 30, 30, 30]);
+// 1 m along the south row, 2 m in the middle, 3 m in the north.
+const flat = waves([10, 10, 10, 20, 20, 20, 30, 30, 30]);
+
+const pixel = (pixels: Uint8ClampedArray, width: number, x: number, y: number) =>
+  Array.from(pixels.slice((y * width + x) * 4, (y * width + x) * 4 + 4));
+const distance = (rgba: number[], metres: number) =>
+  seaColor("waves", metres)
+    .slice(0, 3)
+    .reduce((sum, value, channel) => sum + Math.abs(value - rgba[channel]), 0);
 
 describe("nearestStep", () => {
   const times = ["2026-11-16T18:00:00Z", "2026-11-17T00:00:00Z", "2026-11-17T06:00:00Z"];
@@ -50,21 +68,28 @@ describe("seaBounds", () => {
   });
 });
 
-describe("sampleSea, the sea at one spot", () => {
-  it("gives a grid point its own values, in metres", () => {
-    expect(sampleSea(flat, 0, 12, -28)).toEqual({ heightM: 2, fromDeg: 90, periodS: 8 });
-    expect(sampleSea(flat, 1, 12, -28)).toEqual({ heightM: 3, fromDeg: 270, periodS: 9 });
+describe("sampleSea, the forecast at one spot", () => {
+  it("gives a grid point its own figures, in metres", () => {
+    expect(sampleSea(flat, 0, 12, -28)).toEqual({ value: 2, fromDeg: 90, extra: 8 });
+    expect(sampleSea(flat, 1, 12, -28)).toEqual({ value: 3, fromDeg: 270, extra: 9 });
     // The far corner too, which has no neighbour beyond it.
-    expect(sampleSea(flat, 0, 14, -26)?.heightM).toBe(3);
+    expect(sampleSea(flat, 0, 14, -26)?.value).toBe(3);
+  });
+
+  it("gives wind as it is sent, in knots", () => {
+    const wind: SeaForecast = { ...flat, layer: "wind", scale: 1 };
+    expect(sampleSea(wind, 0, 12, -28)?.value).toBe(20);
   });
 
   it("blends between grid points", () => {
-    expect(sampleSea(flat, 0, 11, -29)?.heightM).toBeCloseTo(1.5, 5);
-    expect(sampleSea(flat, 0, 13.5, -27)?.heightM).toBeCloseTo(2.75, 5);
+    expect(sampleSea(flat, 0, 11, -29)?.value).toBeCloseTo(1.5, 5);
+    expect(sampleSea(flat, 0, 13.5, -27)?.value).toBeCloseTo(2.75, 5);
   });
 
   it("turns the short way round between two directions either side of north", () => {
-    const turning = sea([10, 10, 10, 10, 10, 10, 10, 10, 10], [350, 10, 10, 350, 10, 10, 350, 10, 10]);
+    const turning = waves([10, 10, 10, 10, 10, 10, 10, 10, 10], {
+      direction: [350, 10, 10, 350, 10, 10, 350, 10, 10],
+    });
     const from = sampleSea(turning, 0, 11, -29)?.fromDeg ?? -1;
     // Half way between 350 and 10 is north, not south.
     expect(Math.min(from, 360 - from)).toBeLessThan(1);
@@ -78,32 +103,60 @@ describe("sampleSea, the sea at one spot", () => {
 
   it("goes by the sea points alone next to land, and gives up where land has most of the say", () => {
     // The whole east column is land.
-    const coast = sea([10, 10, null, 20, 20, null, 30, 30, null]);
-    expect(sampleSea(coast, 0, 12, -27.6)?.heightM).toBeCloseTo(2, 5);
+    const coast = waves([10, 10, null, 20, 20, null, 30, 30, null]);
+    expect(sampleSea(coast, 0, 12, -27.6)?.value).toBeCloseTo(2, 5);
     expect(sampleSea(coast, 0, 12, -26.4)).toBeNull();
     expect(sampleSea(coast, 0, 12, -26)).toBeNull();
   });
 });
 
-describe("heightColor", () => {
-  it("changes with the height and stops changing past the top of the scale", () => {
-    const calm = heightColor(0.2);
-    const rough = heightColor(4);
-    expect(calm.slice(0, 3)).not.toEqual(rough.slice(0, 3));
-    expect(heightColor(12)).toEqual(heightColor(30));
-    expect(heightColor(-1)).toEqual(heightColor(0));
+describe("seaMax", () => {
+  it("finds the largest figure of a time step", () => {
+    expect(seaMax(flat, 0)).toBe(3);
+    expect(seaMax(flat, 1)).toBe(4);
+    expect(seaMax(waves([null, null, 12, null]), 0)).toBe(1.2);
+  });
+
+  it("has none where there is nothing", () => {
+    expect(seaMax(waves([null, null, null, null], { cols: 2 }), 0)).toBeNull();
+    expect(seaMax(flat, 9)).toBeNull();
+  });
+});
+
+describe("seaColor", () => {
+  it("changes with the figure and stops changing past the top of the scale", () => {
+    expect(seaColor("waves", 0.2).slice(0, 3)).not.toEqual(seaColor("waves", 4).slice(0, 3));
+    expect(seaColor("waves", 12)).toEqual(seaColor("waves", 30));
+    expect(seaColor("waves", -1)).toEqual(seaColor("waves", 0));
+    expect(seaColor("wind", 70)).toEqual(seaColor("wind", 200));
+  });
+
+  it("reads wind in knots and waves in metres", () => {
+    // 20 knots is a fresh breeze; 20 metres is off the top of the wave scale.
+    expect(seaColor("wind", 20)).not.toEqual(seaColor("waves", 20));
+    expect(seaColor("waves", 20)).toEqual(seaColor("waves", scaleTop("waves")));
+    expect(scaleTop("wind")).toBe(64);
   });
 
   it("is never fully see-through or fully solid, so the map shows through", () => {
-    for (const metres of [0, 0.5, 1, 2.5, 4, 8]) {
-      const alpha = heightColor(metres)[3];
-      expect(alpha).toBeGreaterThan(40);
-      expect(alpha).toBeLessThan(255);
+    for (const layer of ["waves", "wind"] as const) {
+      for (const mark of SEA_SCALES[layer]) {
+        expect(mark.alpha).toBeGreaterThan(40);
+        expect(mark.alpha).toBeLessThan(255);
+      }
+    }
+  });
+
+  it("has its marks in rising order", () => {
+    for (const layer of ["waves", "wind"] as const) {
+      const marks = SEA_SCALES[layer].map((mark) => mark.at);
+      expect(marks).toEqual([...marks].sort((a, b) => a - b));
+      expect(new Set(marks).size).toBe(marks.length);
     }
   });
 
   it("blends between two marks on the scale", () => {
-    const [lower, upper, between] = [heightColor(1), heightColor(2), heightColor(1.5)];
+    const [lower, upper, between] = [seaColor("waves", 1), seaColor("waves", 2), seaColor("waves", 1.5)];
     for (let channel = 0; channel < 3; channel += 1) {
       const low = Math.min(lower[channel], upper[channel]);
       const high = Math.max(lower[channel], upper[channel]);
@@ -114,14 +167,6 @@ describe("heightColor", () => {
 });
 
 describe("paintSea, the picture laid over the map", () => {
-  const pixel = (pixels: Uint8ClampedArray, width: number, x: number, y: number) =>
-    Array.from(pixels.slice((y * width + x) * 4, (y * width + x) * 4 + 4));
-
-  const distance = (rgba: number[], metres: number) =>
-    heightColor(metres)
-      .slice(0, 3)
-      .reduce((sum, value, channel) => sum + Math.abs(value - rgba[channel]), 0);
-
   it("fills the box, north at the top", () => {
     const pixels = paintSea(flat, 0, 6, 40);
     expect(pixels.length).toBe(6 * 40 * 4);
@@ -135,11 +180,47 @@ describe("paintSea, the picture laid over the map", () => {
     expect(bottom[3]).toBeGreaterThan(0);
   });
 
+  it("runs west to east from left to right", () => {
+    // 1 m in the west column, 4 m in the east.
+    const pixels = paintSea(waves([10, 25, 40, 10, 25, 40, 10, 25, 40]), 0, 60, 10);
+    const left = pixel(pixels, 60, 8, 5);
+    const right = pixel(pixels, 60, 51, 5);
+    expect(distance(left, 1.2)).toBeLessThan(distance(left, 3.8));
+    expect(distance(right, 3.8)).toBeLessThan(distance(right, 1.2));
+  });
+
+  it("paints what a tap on the same spot would read", () => {
+    // Uneven figures, land in one corner: every pixel against the slower, plainer sampling.
+    const sea = waves([5, 30, 12, 44, null, 18, 9, 61, 27, 3, 15, 38], { cols: 4 });
+    const [width, height] = [45, 30];
+    const pixels = paintSea(sea, 0, width, height);
+    const { south, west, north, east } = seaBounds(sea);
+    const mercator = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+    let checked = 0;
+    for (let y = 4; y < height - 4; y += 1) {
+      const stretched = mercator(north) + ((y + 0.5) / height) * (mercator(south) - mercator(north));
+      const lat = ((2 * Math.atan(Math.exp(stretched)) - Math.PI / 2) * 180) / Math.PI;
+      for (let x = 4; x < width - 4; x += 1) {
+        const lon = west + ((x + 0.5) / width) * (east - west);
+        const here = sampleSea(sea, 0, lat, lon);
+        const painted = pixel(pixels, width, x, y);
+        if (!here) {
+          expect(painted[3]).toBe(0);
+          continue;
+        }
+        // The picture looks colours up in 256 steps, so allow it the width of a step.
+        expect(distance(painted, here.value)).toBeLessThan(6);
+        checked += 1;
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+  });
+
   it("thins out towards its edges, so the box has no hard border on the map", () => {
-    const even = sea([20, 20, 20, 20, 20, 20, 20, 20, 20]);
+    const even = waves([20, 20, 20, 20, 20, 20, 20, 20, 20]);
     const pixels = paintSea(even, 0, 100, 100);
     const middle = pixel(pixels, 100, 50, 50)[3];
-    expect(middle).toBe(Math.round(heightColor(2)[3]));
+    expect(Math.abs(middle - seaColor("waves", 2)[3])).toBeLessThanOrEqual(1);
     expect(pixel(pixels, 100, 0, 50)[3]).toBeLessThan(middle / 4);
     expect(pixel(pixels, 100, 50, 99)[3]).toBeLessThan(middle / 4);
     expect(pixel(pixels, 100, 3, 50)[3]).toBeLessThan(middle);
@@ -148,10 +229,10 @@ describe("paintSea, the picture laid over the map", () => {
   });
 
   it("leaves land clear", () => {
-    const coast = sea([10, 10, null, 20, 20, null, 30, 30, null]);
+    const coast = waves([10, 10, null, 20, 20, null, 30, 30, null]);
     const pixels = paintSea(coast, 0, 8, 4);
     expect(pixel(pixels, 8, 7, 2)[3]).toBe(0);
-    expect(pixel(pixels, 8, 0, 2)[3]).toBeGreaterThan(0);
+    expect(pixel(pixels, 8, 2, 2)[3]).toBeGreaterThan(0);
   });
 
   it("spaces its rows as a Mercator map does, not evenly in latitude", () => {
@@ -163,39 +244,50 @@ describe("paintSea, the picture laid over the map", () => {
       step: 30,
       rows: 3,
       cols: 2,
-      height: [[0, 0, 30, 30, 60, 60]],
+      value: [[0, 0, 30, 30, 60, 60]],
       direction: [[0, 0, 0, 0, 0, 0]],
-      period: [[8, 8, 8, 8, 8, 8]],
+      extra: [[8, 8, 8, 8, 8, 8]],
       times: ["2026-11-16T18:00:00Z"],
     };
-    const pixels = paintSea(tall, 0, 2, 101);
-    const middle = pixel(pixels, 2, 0, 50);
+    const pixels = paintSea(tall, 0, 40, 101);
+    const middle = pixel(pixels, 40, 20, 50);
     // Heights were set equal to a tenth of the latitude: 3.6 m at 36 N, 3.0 m at 30 N.
     expect(distance(middle, 3.6)).toBeLessThan(distance(middle, 3.0));
+  });
+
+  it("paints nothing for a time step that does not exist", () => {
+    expect(paintSea(flat, 7, 4, 4).every((value) => value === 0)).toBe(true);
   });
 });
 
 describe("seaArrows", () => {
+  // Five by five, so there is an inside to draw arrows in.
+  const wide = waves(
+    Array.from({ length: 25 }, (_, index) => 10 + index),
+    { cols: 5 }
+  );
+
   it("points each arrow the way the waves are going, which is away from where they come from", () => {
-    const arrows = seaArrows(flat, 0, 1);
+    const arrows = seaArrows(wide, 0, 1);
+    // The nine points inside; the outermost ring is where the picture fades away.
     expect(arrows).toHaveLength(9);
-    expect(arrows[0]).toEqual({ pos: [10, -30], towardDeg: 270, heightM: 1 });
-    expect(seaArrows(flat, 1, 1)[8]).toEqual({ pos: [14, -26], towardDeg: 90, heightM: 4 });
+    expect(arrows[0]).toEqual({ pos: [12, -28], towardDeg: 270, value: 1.6 });
+    expect(seaArrows(wide, 1, 1)[8]).toEqual({ pos: [16, -24], towardDeg: 90, value: 3.8 });
   });
 
   it("leaves out land and thins out when asked to", () => {
-    const coast = sea([10, 10, null, 20, 20, null, 30, 30, null]);
-    expect(seaArrows(coast, 0, 1)).toHaveLength(6);
-    expect(seaArrows(flat, 0, 2).map((arrow) => arrow.pos)).toEqual([
-      [10, -30],
-      [10, -26],
-      [14, -30],
-      [14, -26],
+    const land = wide.value[0].map((value, index) => (index === 12 ? null : value));
+    expect(seaArrows({ ...wide, value: [land, land] }, 0, 1)).toHaveLength(8);
+    expect(seaArrows(wide, 0, 2).map((arrow) => arrow.pos)).toEqual([
+      [12, -28],
+      [12, -24],
+      [16, -28],
+      [16, -24],
     ]);
   });
 
   it("draws nothing for a time step that does not exist", () => {
-    expect(seaArrows(flat, 7, 1)).toEqual([]);
+    expect(seaArrows(wide, 7, 1)).toEqual([]);
   });
 });
 

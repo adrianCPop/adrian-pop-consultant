@@ -214,11 +214,16 @@
   height: 100%;
   fill: none;
   /* Quiet enough to leave the track and the pins in front. */
-  stroke: hsl(220 40% 96% / 0.62);
-  stroke-width: 1.9;
+  stroke: hsl(220 40% 97% / 0.78);
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 1.5px hsl(228 39% 6% / 0.85));
+}
+
+/* The same arrow, wider and dark, underneath: an edge that shows on the light colours of the scale. */
+.voyage-sea-arrow .voyage-sea-arrow__edge {
+  stroke: hsl(228 39% 8% / 0.5);
+  stroke-width: 3.6;
 }
 
 .leaflet-tooltip.voyage-sea-readout {
@@ -234,6 +239,10 @@
   white-space: nowrap;
 }
 
-.leaflet-tooltip.voyage-sea-readout::before {
+.leaflet-tooltip-top.voyage-sea-readout::before {
   border-top-color: hsl(224 19% 28%);
+}
+
+.leaflet-tooltip-bottom.voyage-sea-readout::before {
+  border-bottom-color: hsl(224 19% 28%);
 }
