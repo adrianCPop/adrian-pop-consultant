@@ -2,7 +2,9 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./voyage.css";
+import { createSeaLayer, type SeaLayer } from "@/components/voyage/seaLayer";
 import type { LatLon } from "@/lib/geo";
+import type { SeaForecast, SeaSample } from "@/lib/seaField";
 import { cn } from "@/lib/utils";
 
 export interface VoyageMapPin {
@@ -55,6 +57,10 @@ interface VoyageMapProps {
    */
   viewRef?: MutableRefObject<MapView | null>;
   onSelect: (id: string) => void;
+  /** The wave forecast to lay over the sea, and which of its time steps. Null or left out: none. */
+  sea?: { forecast: SeaForecast; step: number } | null;
+  /** The figures for a spot of sea that was clicked, in words. */
+  describeSea?: (sample: SeaSample) => string;
   /** The map's own words, in the page's language. English when left out. */
   text?: Partial<MapText>;
   className?: string;
@@ -103,6 +109,8 @@ const VoyageMap = ({
   fitNonce,
   viewRef,
   onSelect,
+  sea = null,
+  describeSea,
   text,
   className,
 }: VoyageMapProps) => {
@@ -113,6 +121,9 @@ const VoyageMap = ({
   const boatMarkerRef = useRef<L.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const seaLayerRef = useRef<SeaLayer | null>(null);
+  const describeSeaRef = useRef(describeSea);
+  describeSeaRef.current = describeSea;
   /** True once the visitor has moved the map; after that it is not re-fitted behind their back. */
   const movedByUserRef = useRef(false);
   // Requests already acted on. A rebuilt map must not repeat the last one.
@@ -144,6 +155,7 @@ const VoyageMap = ({
       maxZoom: 10,
     });
     mapRef.current = map;
+    seaLayerRef.current = createSeaLayer(map, (sample) => describeSeaRef.current?.(sample) ?? "");
     map.attributionControl.setPrefix(false);
     L.control
       .zoom({ position: "bottomright", zoomInTitle: words.zoomIn, zoomOutTitle: words.zoomOut })
@@ -393,6 +405,8 @@ const VoyageMap = ({
       ["pointerdown", "wheel", "keydown"].forEach((type) =>
         container.removeEventListener(type, markMoved)
       );
+      seaLayerRef.current?.remove();
+      seaLayerRef.current = null;
       map.remove();
       mapRef.current = null;
       pinMarkersRef.current = {};
@@ -401,6 +415,17 @@ const VoyageMap = ({
     // Built once per mount. The page gives the map a new `key` when the data changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After the effect that builds the map, so a rebuilt map gets the waves back.
+  const seaForecast = sea?.forecast ?? null;
+  const seaStep = sea?.step ?? 0;
+  useEffect(() => {
+    if (seaForecast) {
+      seaLayerRef.current?.show(seaForecast, seaStep);
+    } else {
+      seaLayerRef.current?.hide();
+    }
+  }, [seaForecast, seaStep]);
 
   useEffect(() => {
     Object.entries(pinMarkersRef.current).forEach(([id, marker]) => {

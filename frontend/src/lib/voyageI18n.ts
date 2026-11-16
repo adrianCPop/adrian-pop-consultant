@@ -185,6 +185,14 @@ export const makeTexts = (language: VoyageLanguage) => {
       utc(time, { day: "numeric", month: "long", year: "numeric" }),
     clock: (time: number | string) =>
       t("common.utcTime", { time: utc(time, { hour: "2-digit", minute: "2-digit" }) }),
+    /** Weekday, day, month and time in UTC: "Tue 17 Nov, 12:00 UTC". */
+    dayTime: (time: number | string) =>
+      t("common.utcTime", {
+        time: `${utc(time, { weekday: "short", day: "numeric", month: "short" })}, ${utc(time, {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`,
+      }),
     /** Day, month and time in UTC, as the shore controls list things. */
     stamp: (time: number | string) =>
       t("common.utcTime", {

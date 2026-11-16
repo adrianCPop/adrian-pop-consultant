@@ -18,13 +18,16 @@ import {
   Wind,
   X,
 } from "lucide-react";
+import SeaControls, { type SeaState } from "@/components/voyage/SeaControls";
 import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { distanceNm, rhumbPathLengthNm, type LatLon } from "@/lib/geo";
+import { nearestStep, type SeaForecast, type SeaSample } from "@/lib/seaField";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import {
+  fetchSea,
   fetchVoyage,
   photoUrl,
   type VoyageData,
@@ -38,6 +41,8 @@ import { computeStats, toFixes } from "@/lib/voyageStats";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 5 * 60_000;
+/** While the wave forecast is shown, it is asked for again this often. The server has a new one every six hours. */
+const SEA_REFRESH_MS = 30 * 60_000;
 const DAY_MS = 86_400_000;
 /** Past this long without a position, the status dot turns amber. */
 const QUIET_MS = 24 * 3_600_000;
@@ -212,6 +217,13 @@ const VoyagePage = () => {
   const [lightbox, setLightbox] = useState<{ photo: VoyagePhotoRef; entry: VoyageEntry } | null>(
     null
   );
+  // The wave forecast over the map: fetched the first time it is switched on.
+  const [seaOn, setSeaOn] = useState(false);
+  const [seaState, setSeaState] = useState<SeaState>("idle");
+  const [sea, setSea] = useState<SeaForecast | null>(null);
+  const [seaStep, setSeaStep] = useState(0);
+  const seaRef = useRef({ forecast: sea, step: seaStep });
+  seaRef.current = { forecast: sea, step: seaStep };
   /** The entry opened over the page from the map, and which of its photos is shown large. */
   const [opened, setOpened] = useState<{ id: string; photo: number } | null>(null);
   /** Set when the overlay is closed in order to go to the entry in the logbook. */
@@ -260,6 +272,68 @@ const VoyagePage = () => {
   const data = loaded?.data ?? null;
   const voyage = data?.voyage ?? null;
   const serverNow = now + (loaded?.clockOffset ?? 0);
+
+  const clockOffset = loaded?.clockOffset ?? 0;
+  /** `quietly`: a refresh of a forecast already on the map, which stays on it if this fails. */
+  const loadSea = useCallback(
+    async (quietly = false) => {
+      if (!quietly) {
+        setSeaState("loading");
+      }
+      try {
+        const forecast = await fetchSea();
+        // Stay on the moment being looked at; a first forecast opens at the present.
+        const { forecast: previous, step } = seaRef.current;
+        const moment =
+          quietly && previous?.times[step]
+            ? Date.parse(previous.times[step])
+            : Date.now() + clockOffset;
+        setSea(forecast);
+        setSeaStep(nearestStep(forecast.times, moment));
+        setSeaState("ready");
+      } catch {
+        if (!quietly) {
+          setSeaState("failed");
+        }
+      }
+    },
+    [clockOffset]
+  );
+
+  const toggleSea = (on: boolean) => {
+    setSeaOn(on);
+    if (on && seaState !== "ready" && seaState !== "loading") {
+      void loadSea();
+    }
+  };
+
+  const seaShown = seaOn && seaState === "ready";
+  useEffect(() => {
+    if (!seaShown) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadSea(true);
+      }
+    }, SEA_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [seaShown, loadSea]);
+
+  const describeSea = (sample: SeaSample) => {
+    const height = t("unit.metres", { value: texts.number(sample.heightM, 1) });
+    if (sample.fromDeg === null) {
+      return height;
+    }
+    const direction = compass(sample.fromDeg);
+    return sample.periodS === null
+      ? t("public.sea.readout", { height, direction })
+      : t("public.sea.readoutPeriod", {
+          height,
+          direction,
+          seconds: Math.round(sample.periodS),
+        });
+  };
 
   const fixes = useMemo(() => toFixes(data?.track ?? []), [data]);
   const trackLine = useMemo<LatLon[]>(() => fixes.map((fix) => fix.pos), [fixes]);
@@ -721,6 +795,8 @@ const VoyagePage = () => {
           fitNonce={fitNonce}
           viewRef={mapViewRef}
           onSelect={openEntry}
+          sea={seaShown && sea ? { forecast: sea, step: seaStep } : null}
+          describeSea={describeSea}
         />
 
         {stats ? (
@@ -819,6 +895,20 @@ const VoyagePage = () => {
           </button>
         )}
       </section>
+
+      {/* After landfall there is no forecast to show. */}
+      {status === "arrived" ? null : (
+        <SeaControls
+          className="mt-3"
+          on={seaOn}
+          onToggle={toggleSea}
+          state={seaState}
+          times={sea?.times ?? []}
+          step={seaStep}
+          onStep={setSeaStep}
+          now={serverNow}
+        />
+      )}
 
       {stats ? (
         <>

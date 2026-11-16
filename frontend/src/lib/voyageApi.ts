@@ -1,5 +1,6 @@
 /** Client for the voyage tracker API (backend/routes/voyage.py). */
 import type { LatLon } from "@/lib/geo";
+import type { SeaForecast } from "@/lib/seaField";
 
 export interface VoyagePort {
   name: string;
@@ -164,6 +165,9 @@ export const photoUrl = (id: string, size: "thumb" | "full" = "full") =>
 // ---- public
 
 export const fetchVoyage = () => request<VoyageData>("");
+
+/** Waves over the ocean around the planned route, for the map's overlay. */
+export const fetchSea = () => request<SeaForecast>("/sea", {}, 30_000);
 
 // ---- crew (secret link)
 
