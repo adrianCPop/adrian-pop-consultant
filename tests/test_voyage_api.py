@@ -334,6 +334,17 @@ def test_a_failing_weather_service_is_asked_once_not_at_every_visit(ctx, monkeyp
         time.sleep(0.05)
     assert len(calls) == 1
 
+    # ...and asked again once the retry period is over: remembered, not given up on.
+    for entry in voyage_routes._weather_cache.values():
+        entry["checked"] -= voyage_routes.WEATHER_RETRY_S + 1
+    for _ in range(40):
+        voyage_routes._changed()
+        ctx.public()
+        if len(calls) == 2:
+            break
+        time.sleep(0.05)
+    assert len(calls) == 2
+
 
 def test_a_forecast_survives_one_failed_refresh(ctx, monkeypatch):
     ctx.configure(departure_h=+72)
@@ -346,14 +357,28 @@ def test_a_forecast_survives_one_failed_refresh(ctx, monkeypatch):
         entry["fetched"] -= 40 * 60
     voyage_routes._changed()
 
+    failed = []
+
     async def broken_weather(lat, lon):
+        failed.append((lat, lon))
         raise RuntimeError("the weather service is down")
 
     monkeypatch.setattr(voyage_core, "fetch_weather", broken_weather)
-    for _ in range(5):
+    for _ in range(40):
         assert ctx.public()["weather"] == {"wind_kn": 12.0}
         voyage_routes._changed()
         time.sleep(0.05)
+        if failed:
+            break
+    assert len(failed) == 1
+
+    # The outage goes on. A failed refresh must not make the forecast look newer
+    # than it is: ninety minutes later it is over two hours old, and is gone.
+    for entry in voyage_routes._weather_cache.values():
+        entry["checked"] -= 90 * 60
+        entry["fetched"] -= 90 * 60
+    voyage_routes._changed()
+    assert ctx.public()["weather"] is None
 
 
 # --------------------------------------------------------------------------- admin
