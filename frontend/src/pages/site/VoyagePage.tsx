@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   CalendarClock,
   Camera,
@@ -139,8 +140,10 @@ const VoyagePage = () => {
   const goToAfterCloseRef = useRef<string | null>(null);
   /** What had the keyboard focus when the overlay opened (the pin, usually), to hand it back. */
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  /** The entry last opened, to find its pin again if the map was redrawn meanwhile. */
+  /** The entry last shown in the overlay, to find its pin when the overlay closes. */
   const lastOpenedIdRef = useRef<string | null>(null);
+  /** True once the visitor has stepped on from the entry the overlay was opened with. */
+  const steppedRef = useRef(false);
   const openedAtRef = useRef(0);
   /** What the overlay displays; see where it is filled in. */
   const shownRef = useRef<{ entry: VoyageEntry; photo: VoyagePhotoRef | null } | null>(null);
@@ -323,6 +326,17 @@ const VoyagePage = () => {
     shownRef.current = { entry: openedEntry, photo: openedPhoto };
   }
   const shown = shownRef.current;
+  // The entries written just before and just after the one shown.
+  const shownIndex = shown ? entries.findIndex((entry) => entry.id === shown.entry.id) : -1;
+  const earlierEntry = shownIndex > 0 ? entries[shownIndex - 1] : null;
+  const laterEntry =
+    shownIndex >= 0 && shownIndex < entries.length - 1 ? entries[shownIndex + 1] : null;
+
+  const openedId = opened?.id ?? null;
+  useEffect(() => {
+    // Stepping to another entry starts it at its top.
+    overlayScrollerRef.current?.scrollTo({ top: 0 });
+  }, [openedId]);
 
   useEffect(() => {
     // The entry was deleted while it was open. Forget it, so that it does not open
@@ -361,23 +375,40 @@ const VoyagePage = () => {
     returnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     lastOpenedIdRef.current = id;
+    steppedRef.current = false;
     openedAtRef.current = Date.now();
     setSelectedId(id);
     setOpened({ id, photo: 0 });
   };
 
-  /** Where focus goes when the overlay closes: back to what opened it, if that is still there. */
+  /**
+   * Where focus goes when the overlay closes: back to what opened it. If the visitor
+   * stepped on to another entry, to that entry's pin instead, when it has one; and to
+   * the pin as well when what opened the overlay is gone (the map was redrawn).
+   */
   const focusAfterOverlay = () => {
-    const back = returnFocusRef.current;
+    const back = returnFocusRef.current?.isConnected ? returnFocusRef.current : null;
     const id = lastOpenedIdRef.current;
     returnFocusRef.current = null;
     const map = mapSectionRef.current;
+    const pin = id
+      ? map?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`) ?? null
+      : null;
     const target =
-      (back?.isConnected ? back : null) ??
-      // The map was redrawn while the overlay was open: the same entry's new pin.
-      (id ? map?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`) : null) ??
+      (steppedRef.current ? pin ?? back : back ?? pin) ??
       map?.querySelector<HTMLElement>(".voyage-map");
     target?.focus({ preventScroll: true });
+  };
+
+  /** In the overlay, on to the entry written before or after the one shown. */
+  const stepTo = (entry: VoyageEntry | null) => {
+    if (!entry || !openedEntry) {
+      return;
+    }
+    lastOpenedIdRef.current = entry.id;
+    steppedRef.current = true;
+    setSelectedId(entry.id);
+    setOpened({ id: entry.id, photo: 0 });
   };
 
   const closeAndReadInLogbook = (id: string) => {
@@ -1026,6 +1057,19 @@ const VoyagePage = () => {
             event.preventDefault();
             (overlayScrollerRef.current ?? (event.currentTarget as HTMLElement)).focus();
           }}
+          onKeyDown={(event) => {
+            // Left and right arrows step through the entries, as the two buttons do.
+            const target =
+              event.key === "ArrowLeft"
+                ? earlierEntry
+                : event.key === "ArrowRight"
+                  ? laterEntry
+                  : null;
+            if (target) {
+              event.preventDefault();
+              stepTo(target);
+            }
+          }}
           onPointerDownOutside={(event) => {
             // The second press of a double-click on a pin lands outside the overlay
             // it has just opened. It must not close it again.
@@ -1124,21 +1168,59 @@ const VoyagePage = () => {
                       {shown.entry.body}
                     </p>
                   ) : null}
+                  {shown.entry.author || shown.entry.photos.length > 0 ? (
+                    <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      {shown.entry.author ? <span>Written by {shown.entry.author}</span> : null}
+                      {shown.entry.photos.length > 0 ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Camera className="h-3.5 w-3.5 text-primary" />
+                          {shown.entry.photos.length}{" "}
+                          {shown.entry.photos.length === 1 ? "photo" : "photos"}
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground sm:px-6">
-                {shown.entry.author ? <span>Written by {shown.entry.author}</span> : null}
-                {shown.entry.photos.length > 0 ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Camera className="h-3.5 w-3.5 text-primary" />
-                    {shown.entry.photos.length} {shown.entry.photos.length === 1 ? "photo" : "photos"}
-                  </span>
+              <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground sm:px-6">
+                {entries.length > 1 && shownIndex >= 0 ? (
+                  <>
+                    {/* Marked as unavailable rather than disabled, so the button keeps the focus at either end. */}
+                    <button
+                      type="button"
+                      onClick={() => stepTo(earlierEntry)}
+                      aria-disabled={!earlierEntry}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 whitespace-nowrap font-semibold",
+                        earlierEntry ? "text-primary hover:underline" : "cursor-default opacity-40"
+                      )}
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Earlier
+                    </button>
+                    <span className="whitespace-nowrap tabular-nums" aria-live="polite">
+                      <span className="sr-only">Entry </span>
+                      {shownIndex + 1} of {entries.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => stepTo(laterEntry)}
+                      aria-disabled={!laterEntry}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 whitespace-nowrap font-semibold",
+                        laterEntry ? "text-primary hover:underline" : "cursor-default opacity-40"
+                      )}
+                    >
+                      Later
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => closeAndReadInLogbook(shown.entry.id)}
-                  className="ml-auto inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
+                  className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-primary hover:underline"
                 >
                   In the logbook
                   <ArrowDown className="h-3.5 w-3.5" />
