@@ -197,6 +197,12 @@ describe("figures, dates and directions in each language", () => {
     }
   });
 
+  it("names the day of the week for a moment in the forecast", () => {
+    const noon = Date.parse("2026-11-17T12:00:00Z");
+    expect(english.dayTime(noon)).toBe("Tue 17 Nov, 12:00 UTC");
+    expect(romanian.dayTime(noon)).toBe("mar., 17 nov., 12:00 UTC");
+  });
+
   it("stamps a moment with its day and time: UTC for the shore, the device's own for the crew", () => {
     expect(english.stamp(morning)).toBe("20 Nov, 09:05 UTC");
     expect(romanian.stamp(morning)).toBe("20 nov., 09:05 UTC");

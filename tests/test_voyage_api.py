@@ -140,6 +140,11 @@ def ctx(monkeypatch):
 
     monkeypatch.setattr(voyage_core, "fetch_weather", no_weather)
 
+    async def no_sea(grid, layer="waves"):
+        return None
+
+    monkeypatch.setattr(voyage_core, "fetch_sea", no_sea)
+
     app = make_app(db)
 
     # One client for the whole test keeps a single event loop, which Motor needs.
@@ -507,6 +512,749 @@ def test_settings_are_validated(ctx):
     bad["departure"] = "next tuesday"
     res = ctx.client.put("/api/voyage/admin/settings", json=bad, headers=ctx.admin)
     assert res.status_code == 422
+
+
+# --------------------------------------------------------------------------- sea forecast
+
+# The route the tests save: Las Palmas to Saint Lucia by way of 20.5 N, 28 W.
+ROUTE = [[28.13, -15.43], [20.5, -28.0], [14.08, -60.95]]
+
+
+def sea_answers(monkeypatch, fail=False, takes=0.0, layers=None):
+    """Lets the weather service "answer". Returns the list of grids it was asked for.
+
+    `layers`, if given, is filled with which forecast each request was for.
+    """
+    asked = []
+
+    async def fake_sea(grid, layer="waves"):
+        asked.append(grid)
+        if layers is not None:
+            layers.append(layer)
+        if takes:
+            await asyncio.sleep(takes)
+        if fail:
+            return None
+        cells = grid["rows"] * grid["cols"]
+        return {
+            "times": ["2026-11-16T18:00:00Z", "2026-11-17T00:00:00Z"],
+            # The first point is land.
+            "value": [[None] + [12] * (cells - 1), [None] + [15] * (cells - 1)],
+            "direction": [[None] + [270] * (cells - 1)] * 2,
+            "extra": [[None] + [8] * (cells - 1)] * 2,
+        }
+
+    monkeypatch.setattr(voyage_core, "fetch_sea", fake_sea)
+    return asked
+
+
+def age_the_sea_forecast(seconds: float) -> None:
+    """As if `seconds` had passed since everything the server remembers of the forecast."""
+    for state in voyage_routes._sea.values():
+        for moment in ("checked", "fetched"):
+            if state[moment] is not None:
+                state[moment] -= seconds
+    starts = voyage_routes._sea_starts
+    starts["recent"] = [begun - seconds for begun in starts["recent"]]
+
+
+def restart_the_server() -> None:
+    """What a restart leaves: the database, and nothing in memory."""
+    voyage_routes.reset_runtime_state()
+
+
+def test_the_sea_grid_covers_the_ocean_around_the_planned_route():
+    grid = voyage_core.sea_grid(ROUTE)
+    north = grid["south"] + (grid["rows"] - 1) * grid["step"]
+    east = grid["west"] + (grid["cols"] - 1) * grid["step"]
+
+    assert grid["step"] == 2.0
+    # A wide margin all round: weather arrives from well outside the route.
+    assert grid["south"] <= 14.08 - 6 and north >= 28.13 + 10
+    assert grid["west"] <= -60.95 - 8 and east >= -15.43 + 8
+    # But not half the globe.
+    assert grid["south"] >= 0 and north <= 45 and grid["west"] >= -75 and east <= 0
+    assert grid["rows"] * grid["cols"] <= voyage_core.SEA_MAX_POINTS
+
+
+def test_the_sea_grid_gets_coarser_rather_than_larger_for_a_long_route():
+    grid = voyage_core.sea_grid([[50.0, -5.0], [-34.0, 18.0], [-33.0, 151.0]])
+    assert grid["step"] > 2.0
+    assert grid["rows"] * grid["cols"] <= voyage_core.SEA_MAX_POINTS
+    assert grid["south"] <= -34 and grid["south"] + (grid["rows"] - 1) * grid["step"] >= 50
+
+
+def test_there_is_no_sea_grid_without_a_route_or_across_the_date_line():
+    assert voyage_core.sea_grid([]) is None
+    assert voyage_core.sea_grid([[10.0, 20.0]]) is None
+    assert voyage_core.sea_grid([[-17.0, 178.0], [-14.0, -171.0]]) is None
+
+
+def test_the_sea_grid_stops_short_of_the_poles_and_of_the_date_line():
+    far_north = voyage_core.sea_grid([[70.0, 10.0], [76.0, 20.0]])
+    assert far_north["south"] + (far_north["rows"] - 1) * far_north["step"] == 80.0
+
+    far_east = voyage_core.sea_grid([[-18.0, 170.0], [-20.0, 178.0]])
+    assert far_east["west"] + (far_east["cols"] - 1) * far_east["step"] == 180.0
+    far_west = voyage_core.sea_grid([[-18.0, -170.0], [-20.0, -178.0]])
+    assert far_west["west"] == -180.0
+
+    # Beyond where the box is cut off there is nothing left to ask about.
+    assert voyage_core.sea_grid([[89.0, 0.0], [89.5, 5.0]]) is None
+
+
+def test_fetch_sea_asks_for_every_grid_point_in_small_batches(monkeypatch):
+    grid = {"south": 10.0, "west": -30.0, "step": 2.0, "rows": 3, "cols": 4}
+    monkeypatch.setattr(voyage_core, "SEA_CHUNK", 5)
+    requests = []
+
+    async def fake_marine(client, url, params):
+        assert url == voyage_core._MARINE_URL
+        lats = [float(v) for v in params["latitude"].split(",")]
+        lons = [float(v) for v in params["longitude"].split(",")]
+        requests.append(list(zip(lats, lons)))
+        return [
+            {
+                "hourly": {
+                    "time": ["2026-11-16T18:00", "2026-11-17T00:00"],
+                    # Land where the longitude is -30; elsewhere the latitude tells points apart.
+                    "wave_height": [None, None] if lon == -30 else [lat / 10, 1.26],
+                    "wave_direction": [None, None] if lon == -30 else [359.6, 271.2],
+                    "wave_period": [None, None] if lon == -30 else [7.4, 8.5],
+                }
+            }
+            for lat, lon in zip(lats, lons)
+        ]
+
+    asked_for = []
+
+    clients = set()
+
+    async def noting(client, url, params):
+        clients.add(id(client))
+        asked_for.append({key: value for key, value in params.items() if "itude" not in key})
+        return await fake_marine(client, url, params)
+
+    monkeypatch.setattr(voyage_core, "_forecast_json", noting)
+    # 19:40 UTC on 16 November 2026.
+    sea = asyncio.run(voyage_core.fetch_sea(grid, now=1794858000))
+
+    # What is asked for, and for which hours: the same in every batch, from the
+    # six-hour mark just passed to a week on.
+    assert asked_for == [
+        {
+            "hourly": "wave_height,wave_direction,wave_period",
+            "start_hour": "2026-11-16T18:00",
+            "end_hour": "2026-11-23T12:00",
+            "temporal_resolution": "hourly_6",
+        }
+    ] * 3
+
+    # Twelve points, south-west first, row by row, at most five to a request,
+    # all over one connection.
+    assert [len(batch) for batch in requests] == [5, 5, 2]
+    assert len(clients) == 1
+    asked = [point for batch in requests for point in batch]
+    assert asked[0] == (10.0, -30.0) and asked[1] == (10.0, -28.0) and asked[4] == (12.0, -30.0)
+    assert asked[-1] == (14.0, -24.0)
+
+    assert sea["times"] == ["2026-11-16T18:00:00Z", "2026-11-17T00:00:00Z"]
+    # Heights in tenths of a metre, directions and periods in whole degrees and seconds.
+    assert sea["value"][0][:5] == [None, 10, 10, 10, None]
+    assert sea["value"][0][5] == 12 and sea["value"][1][5] == 13
+    assert sea["direction"][0][1] == 0 and sea["direction"][1][1] == 271
+    assert sea["extra"][0][1] == 7 and sea["extra"][1][1] == 8
+    # Land has nothing at all, not a direction without a height.
+    assert sea["direction"][0][0] is None and sea["extra"][0][0] is None
+
+
+def test_fetch_sea_asks_the_weather_service_for_wind_in_knots(monkeypatch):
+    grid = {"south": 10.0, "west": -30.0, "step": 2.0, "rows": 2, "cols": 2}
+    calls = []
+
+    async def fake_forecast(client, url, params):
+        calls.append((url, {key: value for key, value in params.items() if "itude" not in key}))
+        return [
+            {
+                "hourly": {
+                    "time": ["2026-11-16T18:00"],
+                    "wind_speed_10m": [16.9],
+                    "wind_direction_10m": [85],
+                    "wind_gusts_10m": [22.4],
+                }
+            }
+        ] * 4
+
+    monkeypatch.setattr(voyage_core, "_forecast_json", fake_forecast)
+    wind = asyncio.run(voyage_core.fetch_sea(grid, "wind", now=1794858000))
+
+    assert calls == [
+        (
+            voyage_core._FORECAST_URL,
+            {
+                "hourly": "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+                "start_hour": "2026-11-16T18:00",
+                "end_hour": "2026-11-23T12:00",
+                "temporal_resolution": "hourly_6",
+                "wind_speed_unit": "kn",
+            },
+        )
+    ]
+    # Whole knots, as they came.
+    assert wind["value"] == [[17] * 4] and wind["direction"] == [[85] * 4] and wind["extra"] == [[22] * 4]
+
+
+def test_fetch_sea_gives_up_at_the_first_batch_that_fails(monkeypatch):
+    grid = {"south": 10.0, "west": -30.0, "step": 2.0, "rows": 3, "cols": 4}
+    monkeypatch.setattr(voyage_core, "SEA_CHUNK", 5)
+    requests = []
+
+    async def failing_marine(client, url, params):
+        requests.append(params)
+        raise RuntimeError("429")
+
+    monkeypatch.setattr(voyage_core, "_forecast_json", failing_marine)
+    assert asyncio.run(voyage_core.fetch_sea(grid)) is None
+    # The other batches are not sent: each point asked for counts against the daily allowance.
+    assert len(requests) == 1
+
+
+def test_fetch_sea_takes_the_bare_answer_the_service_gives_for_a_single_place(monkeypatch):
+    grid = {"south": 10.0, "west": -30.0, "step": 2.0, "rows": 3, "cols": 2}
+    monkeypatch.setattr(voyage_core, "SEA_CHUNK", 5)
+
+    async def fake_marine(client, url, params):
+        places = params["latitude"].split(",")
+        one = {"hourly": {"time": ["2026-11-16T18:00"], "wave_height": [2.0], "wave_direction": [45], "wave_period": [9]}}
+        # Asked about one place, the service answers with that place, not a list of one.
+        return one if len(places) == 1 else [one] * len(places)
+
+    monkeypatch.setattr(voyage_core, "_forecast_json", fake_marine)
+    sea = asyncio.run(voyage_core.fetch_sea(grid))
+    assert sea["value"] == [[20] * 6]
+    assert sea["direction"] == [[45] * 6]
+
+
+def test_fetch_sea_refuses_an_answer_that_does_not_match_the_request(monkeypatch):
+    grid = {"south": 10.0, "west": -30.0, "step": 2.0, "rows": 1, "cols": 2}
+
+    async def short_marine(client, url, params):
+        return [{"hourly": {"time": ["2026-11-16T18:00"], "wave_height": [1.0]}}]
+
+    monkeypatch.setattr(voyage_core, "_forecast_json", short_marine)
+    assert asyncio.run(voyage_core.fetch_sea(grid)) is None
+
+
+def test_the_sea_forecast_is_for_the_planned_area(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+
+    res = ctx.client.get("/api/voyage/sea")
+    assert res.status_code == 200, res.text
+    sea = res.json()
+    grid = voyage_core.sea_grid(ROUTE)
+    assert asked == [grid]
+    assert {key: sea[key] for key in grid} == grid
+    assert sea["layer"] == "waves" and sea["scale"] == 10
+    assert sea["times"] == ["2026-11-16T18:00:00Z", "2026-11-17T00:00:00Z"]
+    assert sea["value"][0][:2] == [None, 12] and sea["value"][1][1] == 15
+    assert len(sea["direction"][0]) == grid["rows"] * grid["cols"]
+    assert sea["fetched"].endswith("Z")
+    assert "max-age" in res.headers["cache-control"]
+
+
+def test_the_sea_forecast_never_follows_the_boat(ctx, monkeypatch):
+    # Under way and far off the planned route: the area asked about is still the plan's.
+    ctx.configure(departure_h=-48)
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    ctx.fix(tracker, 44.0, -30.0, NOW - 2 * HOUR)
+    asked = sea_answers(monkeypatch)
+
+    assert ctx.client.get("/api/voyage/sea").status_code == 200
+    assert asked == [voyage_core.sea_grid(ROUTE)]
+
+
+def test_before_departure_the_sea_forecast_knows_nothing_of_where_the_boat_is(ctx, monkeypatch):
+    # Still in port, with positions already arriving from the tracker and an entry
+    # carrying the phone's own GPS, all of it far from the planned route.
+    ctx.configure(departure_h=+72)
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    crew = ctx.make_key("Adrian")["key"]
+    ctx.fix(tracker, 52.0, 4.0, NOW - HOUR)
+    res = ctx.client.post(
+        "/api/voyage/entries",
+        json={
+            "id": uuid.uuid4().hex,
+            "written_at": iso(NOW - HOUR),
+            "title": "Packing",
+            "body": "",
+            "position": {"lat": 52.0, "lon": 4.0, "accuracy": 10},
+            "photo_ids": [],
+        },
+        headers=bearer(crew),
+    )
+    assert res.status_code == 200, res.text
+    asked = sea_answers(monkeypatch)
+
+    sea = ctx.client.get("/api/voyage/sea").json()
+    grid = voyage_core.sea_grid(ROUTE)
+    assert asked == [grid]
+    assert {key: sea[key] for key in grid} == grid
+
+
+def test_the_public_page_is_told_whether_there_is_a_sea_forecast(ctx):
+    assert ctx.public()["sea"] is False
+
+    ctx.configure(departure_h=+72)
+    assert ctx.public()["sea"] is True
+    ctx.configure(departure_h=-48)
+    assert ctx.public()["sea"] is True
+
+    # A route across the date line has none, and neither has a voyage that is over.
+    ctx.configure(departure_h=-48, planned_route=[[-17.0, 178.0], [-14.0, -171.0]])
+    assert ctx.public()["sea"] is False
+    ctx.configure(departure_h=-96, arrived_at=iso(NOW - HOUR))
+    assert ctx.public()["sea"] is False
+
+
+def test_no_sea_forecast_before_a_voyage_is_saved_or_after_arrival(ctx, monkeypatch):
+    asked = sea_answers(monkeypatch)
+    assert ctx.client.get("/api/voyage/sea").status_code == 404
+
+    ctx.configure(departure_h=-96, arrived_at=iso(NOW - HOUR))
+    assert ctx.client.get("/api/voyage/sea").status_code == 404
+    assert asked == []
+
+
+def test_the_sea_forecast_is_fetched_once_for_everyone(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+
+    first = ctx.client.get("/api/voyage/sea")
+    second = ctx.client.get("/api/voyage/sea")
+    assert first.status_code == second.status_code == 200
+    assert first.content == second.content
+    assert len(asked) == 1
+
+
+def test_an_old_sea_forecast_is_served_while_a_new_one_is_fetched(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+    ctx.client.get("/api/voyage/sea")
+
+    age_the_sea_forecast(voyage_routes.SEA_TTL_S + 60)
+    res = ctx.client.get("/api/voyage/sea")
+    # Nobody waits for the service: this visitor gets the one in hand.
+    assert res.status_code == 200
+    for _ in range(40):
+        if len(asked) == 2:
+            break
+        time.sleep(0.05)
+    assert len(asked) == 2
+    # And it is not fetched a third time straight after.
+    ctx.client.get("/api/voyage/sea")
+    time.sleep(0.1)
+    assert len(asked) == 2
+
+
+def test_visitors_arriving_during_a_refresh_do_not_start_another(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    sea_answers(monkeypatch)
+    ctx.client.get("/api/voyage/sea")
+
+    slow = sea_answers(monkeypatch, takes=0.3)
+    age_the_sea_forecast(voyage_routes.SEA_TTL_S + 60)
+    for _ in range(4):
+        assert ctx.client.get("/api/voyage/sea").status_code == 200
+    time.sleep(0.5)
+    assert len(slow) == 1
+
+
+def test_a_failing_marine_service_is_not_asked_at_every_visit(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch, fail=True)
+
+    for _ in range(3):
+        assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 1
+
+    # Asked again after the wait, and after a second failure the wait is longer.
+    age_the_sea_forecast(voyage_routes.SEA_RETRY_S + 1)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 2
+    age_the_sea_forecast(voyage_routes.SEA_RETRY_S + 1)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 2
+    age_the_sea_forecast(voyage_routes.SEA_RETRY_S + 1)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 3
+
+
+def test_a_sea_forecast_survives_a_failed_refresh_but_not_for_ever(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    sea_answers(monkeypatch)
+    good = ctx.client.get("/api/voyage/sea")
+    assert good.status_code == 200
+
+    failed = sea_answers(monkeypatch, fail=True)
+    age_the_sea_forecast(voyage_routes.SEA_TTL_S + 60)
+    assert ctx.client.get("/api/voyage/sea").content == good.content
+    for _ in range(40):
+        if failed:
+            break
+        time.sleep(0.05)
+    assert len(failed) == 1
+    time.sleep(0.1)
+    # Still the old one, with its own date on it.
+    assert ctx.client.get("/api/voyage/sea").content == good.content
+
+    # A day on and still failing: an old forecast would be shown as the sea ahead.
+    age_the_sea_forecast(voyage_routes.SEA_MAX_AGE_S)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+
+
+FAR_ROUTE = [[36.0, -6.0], [38.5, -28.6], [32.3, -64.8]]
+
+
+def test_a_new_route_gets_a_sea_forecast_of_its_own_but_not_within_two_minutes(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+    ctx.client.get("/api/voyage/sea")
+
+    # The route is corrected straight away. The first forecast is not served for
+    # it, and a second fetch does not begin on the heels of the first: together
+    # they would pass what the service allows in a minute.
+    ctx.configure(departure_h=+72, planned_route=FAR_ROUTE)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 1
+
+    age_the_sea_forecast(voyage_routes.SEA_MIN_GAP_S)
+    sea = ctx.client.get("/api/voyage/sea").json()
+    assert asked == [voyage_core.sea_grid(ROUTE), voyage_core.sea_grid(FAR_ROUTE)]
+    assert sea["south"] == voyage_core.sea_grid(FAR_ROUTE)["south"]
+
+
+def test_a_forecast_that_arrives_after_the_route_changed_is_thrown_away(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    sea_answers(monkeypatch)
+    ctx.client.get("/api/voyage/sea")
+
+    # A refresh is on its way when the route is changed.
+    slow = sea_answers(monkeypatch, takes=0.3)
+    age_the_sea_forecast(voyage_routes.SEA_TTL_S + 60)
+    assert ctx.client.get("/api/voyage/sea").status_code == 200
+    ctx.configure(departure_h=+72, planned_route=FAR_ROUTE)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+
+    time.sleep(0.6)
+    assert slow == [voyage_core.sea_grid(ROUTE)]
+    # What came back was for the old route's area: not for this one.
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert voyage_routes._sea["waves"]["body"] is None
+
+
+def test_a_restart_does_not_cost_a_fetch(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+    before = ctx.client.get("/api/voyage/sea")
+
+    restart_the_server()
+    after = ctx.client.get("/api/voyage/sea")
+    assert after.status_code == 200
+    assert after.content == before.content
+    assert len(asked) == 1
+
+
+def test_the_wait_after_a_failure_outlasts_a_restart(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch, fail=True)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+
+    for _ in range(3):
+        restart_the_server()
+        assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 1
+
+
+def test_a_restart_just_after_a_fetch_for_another_route_still_waits(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+    ctx.client.get("/api/voyage/sea")
+
+    ctx.configure(departure_h=+72, planned_route=FAR_ROUTE)
+    restart_the_server()
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 1
+
+
+def test_many_first_visitors_share_one_fetch(monkeypatch):
+    voyage_routes.reset_runtime_state()
+    asked = sea_answers(monkeypatch, takes=0.05)
+    grid = voyage_core.sea_grid(ROUTE)
+
+    async def five_at_once():
+        db = AsyncMongoMockClient()["voyage_sea_test"]
+        return await asyncio.gather(*[voyage_routes._sea_body(db, "waves", grid) for _ in range(5)])
+
+    bodies = asyncio.run(five_at_once())
+    assert len(asked) == 1
+    assert bodies[0] is not None and all(body == bodies[0] for body in bodies)
+    voyage_routes.reset_runtime_state()
+
+
+def test_the_wind_is_a_forecast_of_its_own_over_the_same_area(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    layers = []
+    asked = sea_answers(monkeypatch, layers=layers)
+
+    res = ctx.client.get("/api/voyage/sea", params={"layer": "wind"})
+    assert res.status_code == 200, res.text
+    wind = res.json()
+    assert wind["layer"] == "wind" and wind["scale"] == 1
+    assert asked == [voyage_core.sea_grid(ROUTE)] and layers == ["wind"]
+
+    assert ctx.client.get("/api/voyage/sea", params={"layer": "tides"}).status_code == 404
+    assert len(asked) == 1
+
+
+def test_waves_and_wind_are_not_fetched_in_the_same_two_minutes(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    layers = []
+    asked = sea_answers(monkeypatch, layers=layers)
+    assert ctx.client.get("/api/voyage/sea").status_code == 200
+
+    # Together the two would pass what the service allows in a minute. The page
+    # is told when to ask again, and this is not held against the service.
+    res = ctx.client.get("/api/voyage/sea", params={"layer": "wind"})
+    assert res.status_code == 503
+    # When to come back: when the two minutes are up, give or take the test's own time.
+    assert voyage_routes.SEA_MIN_GAP_S - 5 <= res.json()["retry_in"] <= voyage_routes.SEA_MIN_GAP_S + 2
+    assert layers == ["waves"]
+
+    age_the_sea_forecast(voyage_routes.SEA_MIN_GAP_S)
+    assert ctx.client.get("/api/voyage/sea", params={"layer": "wind"}).status_code == 200
+    assert layers == ["waves", "wind"]
+    # The waves are still the ones fetched before.
+    assert ctx.client.get("/api/voyage/sea").json()["layer"] == "waves"
+    assert len(asked) == 2
+
+
+def test_a_failed_fetch_does_not_ask_the_page_to_come_back_soon(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    sea_answers(monkeypatch, fail=True)
+    res = ctx.client.get("/api/voyage/sea")
+    assert res.status_code == 503
+    assert "retry_in" not in res.json()
+
+
+def test_wind_asked_for_after_a_restart_still_waits_its_turn(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    layers = []
+    sea_answers(monkeypatch, layers=layers)
+    assert ctx.client.get("/api/voyage/sea").status_code == 200
+
+    restart_the_server()
+    res = ctx.client.get("/api/voyage/sea", params={"layer": "wind"})
+    assert res.status_code == 503 and res.json()["retry_in"] > 100
+    assert layers == ["waves"]
+
+
+def test_a_restart_in_the_middle_of_a_fetch_is_not_followed_by_another_fetch(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = []
+
+    async def cut_short(grid, layer="waves"):
+        asked.append(layer)
+        # The process is restarted while the weather service is answering.
+        restart_the_server()
+        raise RuntimeError("restarted")
+
+    monkeypatch.setattr(voyage_core, "fetch_sea", cut_short)
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    # That it had begun was written down before anything was asked.
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert ctx.client.get("/api/voyage/sea", params={"layer": "wind"}).status_code == 503
+    assert asked == ["waves"]
+
+
+def test_two_visitors_in_the_same_instant_start_one_refresh(monkeypatch):
+    voyage_routes.reset_runtime_state()
+    asked = sea_answers(monkeypatch, takes=0.05)
+    grid = voyage_core.sea_grid(ROUTE)
+
+    async def at_once():
+        db = AsyncMongoMockClient()["voyage_sea_test"]
+        await voyage_routes._sea_body(db, "waves", grid)
+        age_the_sea_forecast(voyage_routes.SEA_TTL_S + 60)
+        bodies = await asyncio.gather(*[voyage_routes._sea_body(db, "waves", grid) for _ in range(4)])
+        await asyncio.sleep(0.2)
+        return bodies
+
+    bodies = asyncio.run(at_once())
+    # Everyone got the one in hand, and one refresh was started for all of them.
+    assert all(body is not None for body in bodies)
+    assert len(asked) == 2
+    voyage_routes.reset_runtime_state()
+
+
+def test_asking_for_the_other_forecast_does_not_wait_for_a_fetch_in_progress(monkeypatch):
+    voyage_routes.reset_runtime_state()
+    sea_answers(monkeypatch, takes=0.4)
+    grid = voyage_core.sea_grid(ROUTE)
+
+    async def both():
+        db = AsyncMongoMockClient()["voyage_sea_test"]
+        waves = asyncio.create_task(voyage_routes._sea_body(db, "waves", grid))
+        await asyncio.sleep(0.05)
+        began = time.monotonic()
+        wind = await voyage_routes._sea_body(db, "wind", grid)
+        waited = time.monotonic() - began
+        return await waves, wind, waited
+
+    waves, wind, waited = asyncio.run(both())
+    assert waves is not None and wind is None
+    # Told at once that it is not its turn, not after the waves have arrived.
+    assert waited < 0.2
+    voyage_routes.reset_runtime_state()
+
+
+class _BrokenSea:
+    """The forecasts' collection of a database that is not answering."""
+
+    def __init__(self, reads=True, writes=True):
+        self.reads, self.writes = reads, writes
+
+    def find(self, *args, **kwargs):
+        if not self.reads:
+            raise RuntimeError("the database is not answering")
+        return self._nothing()
+
+    class _nothing:
+        async def to_list(self, length=None):
+            return []
+
+    async def update_one(self, *args, **kwargs):
+        if not self.writes:
+            raise RuntimeError("the database is not answering")
+
+
+def test_nothing_is_fetched_while_the_database_cannot_say_what_was_fetched_before(monkeypatch):
+    voyage_routes.reset_runtime_state()
+    asked = sea_answers(monkeypatch)
+    grid = voyage_core.sea_grid(ROUTE)
+
+    class Db:
+        voyage_sea = _BrokenSea(reads=False)
+
+    assert asyncio.run(voyage_routes._sea_body(Db(), "waves", grid)) is None
+    assert asked == []
+    voyage_routes.reset_runtime_state()
+
+
+def test_nothing_is_fetched_when_the_fetch_cannot_be_written_down_first(monkeypatch):
+    voyage_routes.reset_runtime_state()
+    asked = sea_answers(monkeypatch)
+    grid = voyage_core.sea_grid(ROUTE)
+
+    class Db:
+        voyage_sea = _BrokenSea(writes=False)
+
+    assert asyncio.run(voyage_routes._sea_body(Db(), "waves", grid)) is None
+    assert asked == []
+    # And it is not held against the next try, once the database is back.
+    assert voyage_routes._sea_wait() == 0
+    voyage_routes.reset_runtime_state()
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"_id": "starts", "recent": "yesterday"},
+        {"_id": "starts", "recent": ["soon"]},
+        {"_id": "waves", "key": 5, "checked": 1.0},
+        {"_id": "waves", "key": "KEY", "checked": "noon", "fetched": None, "body": b"{}"},
+        {"_id": "waves", "key": "KEY", "checked": 1.0, "fetched": 1.0, "failures": "many"},
+    ],
+)
+def test_a_stored_record_that_makes_no_sense_does_not_break_the_forecast(monkeypatch, record):
+    voyage_routes.reset_runtime_state()
+    asked = sea_answers(monkeypatch)
+    grid = voyage_core.sea_grid(ROUTE)
+    if record.get("key") == "KEY":
+        record = {**record, "key": [grid[name] for name in ("south", "west", "step", "rows", "cols")]}
+
+    async def run():
+        db = AsyncMongoMockClient()["voyage_sea_test"]
+        await db.voyage_sea.insert_one(record)
+        first = await voyage_routes._sea_body(db, "waves", grid)
+        age_the_sea_forecast(voyage_routes.SEA_MIN_GAP_S)
+        return first, await voyage_routes._sea_body(db, "waves", grid)
+
+    first, later = asyncio.run(run())
+    # No error, and a forecast at the latest once two minutes have passed.
+    assert later is not None
+    assert len(asked) == 1
+    if record["_id"] == "starts":
+        # What the record said is lost, so the first request was made to wait.
+        assert first is None
+    voyage_routes.reset_runtime_state()
+
+
+def test_no_more_than_so_many_fetches_in_an_hour_or_a_day(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch)
+    now = time.time()
+
+    # The route has been changed again and again: eight fetches in the last hour.
+    voyage_routes._sea_starts["recent"] = [
+        now - 300 * count for count in range(voyage_routes.SEA_MAX_PER_HOUR, 0, -1)
+    ]
+    res = ctx.client.get("/api/voyage/sea")
+    assert res.status_code == 503
+    # Not a matter of two minutes this time: the oldest of them has to be an hour old.
+    assert res.json()["retry_in"] > 15 * 60
+    assert asked == []
+
+    age_the_sea_forecast(3600)
+    assert ctx.client.get("/api/voyage/sea").status_code == 200
+    assert len(asked) == 1
+
+    # And over a day: fourteen, well apart, and a fifteenth has to wait.
+    restart_the_server()
+    ctx.login()
+    voyage_routes._sea_starts["recent"] = [
+        now - 5400 * count for count in range(voyage_routes.SEA_MAX_PER_DAY, 0, -1)
+    ]
+    ctx.configure(departure_h=+72, planned_route=FAR_ROUTE)
+    res = ctx.client.get("/api/voyage/sea")
+    assert res.status_code == 503 and res.json()["retry_in"] > 3600
+    assert len(asked) == 1
+
+
+def test_a_forecast_about_to_be_replaced_is_not_kept_long_by_browsers(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    sea_answers(monkeypatch, takes=0.2)
+    fresh = ctx.client.get("/api/voyage/sea")
+    assert fresh.headers["cache-control"] == "public, max-age=900"
+
+    age_the_sea_forecast(voyage_routes.SEA_TTL_S + 60)
+    stale = ctx.client.get("/api/voyage/sea")
+    assert stale.status_code == 200
+    assert stale.headers["cache-control"] == "public, max-age=60"
+    time.sleep(0.4)
+
+
+def test_a_sea_fetch_that_takes_too_long_is_given_up(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    asked = sea_answers(monkeypatch, takes=0.5)
+    monkeypatch.setattr(voyage_routes, "SEA_DEADLINE_S", 0.05)
+
+    started = time.monotonic()
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert time.monotonic() - started < 0.4
+    # It counts as a failure: the service is left alone for a while.
+    assert ctx.client.get("/api/voyage/sea").status_code == 503
+    assert len(asked) == 1
 
 
 # --------------------------------------------------------------------------- Romanian names

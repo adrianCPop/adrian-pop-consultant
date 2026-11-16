@@ -384,3 +384,172 @@ async def fetch_weather(lat: float, lon: float) -> Optional[dict]:
     if all(value is None for key, value in weather.items() if key != "time"):
         return None
     return weather
+
+
+# --------------------------------------------------------------------------- the sea around the route
+
+# Each point asked for counts as one call against Open-Meteo's free allowance
+# (10,000 a day, 600 a minute), so the grid is kept under the minute's limit,
+# with room left for the forecast at the boat, and gets coarser, not larger, for
+# a longer route.
+SEA_MAX_POINTS = 580
+# Every one of these divides 80 and 180, where the grid is cut off.
+_SEA_STEPS_DEG = (2.0, 2.5, 4.0, 5.0, 10.0)
+# Weather arrives from outside the route, mostly from the north.
+_SEA_MARGIN_NORTH, _SEA_MARGIN_SOUTH, _SEA_MARGIN_EAST_WEST = 10.0, 6.0, 8.0
+SEA_HOURS = 168
+SEA_INTERVAL_H = 6
+SEA_CHUNK = 100
+
+
+def sea_grid(route: Sequence[Sequence[float]]) -> Optional[dict]:
+    """The area the wave forecast covers, worked out from the planned route alone.
+
+    A grid of points `step` degrees apart, row by row from the south-west corner.
+    It is never derived from where the boat is, so asking for it tells the weather
+    service nothing that the public page does not already show.
+    """
+    points = [(float(lat), float(lon)) for lat, lon in route or []]
+    if len(points) < 2:
+        return None
+    lats, lons = [lat for lat, _ in points], [lon for _, lon in points]
+    if max(lons) - min(lons) > 180:
+        # A route across the date line: its two halves are not one box.
+        return None
+
+    for step in _SEA_STEPS_DEG:
+        south = max(-80.0, math.floor((min(lats) - _SEA_MARGIN_SOUTH) / step) * step)
+        north = min(80.0, math.ceil((max(lats) + _SEA_MARGIN_NORTH) / step) * step)
+        west = max(-180.0, math.floor((min(lons) - _SEA_MARGIN_EAST_WEST) / step) * step)
+        east = min(180.0, math.ceil((max(lons) + _SEA_MARGIN_EAST_WEST) / step) * step)
+        rows = round((north - south) / step) + 1
+        cols = round((east - west) / step) + 1
+        if rows < 2 or cols < 2:
+            # Nothing left once the box is cut off near a pole.
+            return None
+        if rows * cols <= SEA_MAX_POINTS:
+            return {"south": south, "west": west, "step": step, "rows": rows, "cols": cols}
+    return None
+
+
+# What can be laid over the map. For each: where it is asked for, the three figures
+# kept per grid point (the name they are sent to the page under, the service's
+# name for them, and what they are multiplied by to be kept as whole numbers),
+# and anything else the request needs. The first figure is the one drawn in colour.
+SEA_LAYERS = {
+    # Height in tenths of a metre, where the waves come from, seconds between them.
+    "waves": {
+        "url": _MARINE_URL,
+        "figures": (("value", "wave_height", 10), ("direction", "wave_direction", 1), ("extra", "wave_period", 1)),
+        "also": {},
+    },
+    # Speed in knots, where the wind comes from, gusts in knots.
+    "wind": {
+        "url": _FORECAST_URL,
+        "figures": (("value", "wind_speed_10m", 1), ("direction", "wind_direction_10m", 1), ("extra", "wind_gusts_10m", 1)),
+        "also": {"wind_speed_unit": "kn"},
+    },
+}
+
+
+async def _forecast_json(client, url: str, params: dict):
+    response = await client.get(url, params=params)
+    if response.status_code != 200:
+        raise RuntimeError(f"the weather service answered {response.status_code}")
+    return response.json()
+
+
+def _whole(value, scale: float = 1.0) -> Optional[int]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return None
+    return int(round(value * scale))
+
+
+async def fetch_sea(grid: dict, layer: str = "waves", now: Optional[float] = None) -> Optional[dict]:
+    """Forecast of one layer for every point of the grid, from Open-Meteo. None when it cannot be had.
+
+    For each time step, one value per grid point in the grid's own order, under
+    the names `value`, `direction` and `extra` (see SEA_LAYERS). None where the
+    model has nothing: for waves, that is land.
+    """
+    spec = SEA_LAYERS[layer]
+    total = grid["rows"] * grid["cols"]
+    step = grid["step"]
+    # The same hours are named in every batch, so a fetch that runs across the top
+    # of an hour still gets one set of times: from the last six-hour mark, a week on.
+    interval = SEA_INTERVAL_H * 3600
+    first = int((time.time() if now is None else now) // interval) * interval
+    last = first + (SEA_HOURS // SEA_INTERVAL_H - 1) * interval
+    request = {
+        "hourly": ",".join(theirs for _, theirs, _ in spec["figures"]),
+        "start_hour": time.strftime("%Y-%m-%dT%H:%M", time.gmtime(first)),
+        "end_hour": time.strftime("%Y-%m-%dT%H:%M", time.gmtime(last)),
+        "temporal_resolution": f"hourly_{SEA_INTERVAL_H}",
+        **spec["also"],
+    }
+
+    def place(index: int) -> Tuple[float, float]:
+        row, col = divmod(index, grid["cols"])
+        return grid["south"] + row * step, grid["west"] + col * step
+
+    times: Optional[List[str]] = None
+    sea: Dict[str, List[List[Optional[int]]]] = {}
+    # One connection for all the batches of a fetch.
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        for start in range(0, total, SEA_CHUNK):
+            batch = [place(index) for index in range(start, min(start + SEA_CHUNK, total))]
+            # One batch after another, and none after one that fails: every point asked
+            # for is counted, whether or not the rest of the forecast can be put together.
+            try:
+                answer = await _forecast_json(
+                    client,
+                    spec["url"],
+                    {
+                        "latitude": ",".join(f"{lat:g}" for lat, _ in batch),
+                        "longitude": ",".join(f"{lon:g}" for _, lon in batch),
+                        **request,
+                    },
+                )
+            except Exception as error:
+                logger.warning("Forecast of %s failed: %r", layer, error)
+                return None
+
+            # Asked about one place, the service answers with that place, not a list of one.
+            locations = answer if isinstance(answer, list) else [answer]
+            if len(locations) != len(batch):
+                logger.warning("Forecast of %s: %s places asked, %s answered", layer, len(batch), len(locations))
+                return None
+            for offset, location in enumerate(locations):
+                hourly = (location if isinstance(location, dict) else {}).get("hourly") or {}
+                stamps = hourly.get("time") or []
+                if times is None:
+                    if not stamps:
+                        return None
+                    times = list(stamps)
+                    sea = {ours: [[None] * total for _ in times] for ours, _, _ in spec["figures"]}
+                elif list(stamps) != times:
+                    logger.warning("Forecast of %s: the places do not share one set of times", layer)
+                    return None
+
+                index = start + offset
+                main, *others = spec["figures"]
+                series = {ours: hourly.get(theirs) or [] for ours, theirs, _ in spec["figures"]}
+                for moment in range(len(times)):
+                    def figure(ours: str, scale: float) -> Optional[int]:
+                        values = series[ours]
+                        return _whole(values[moment], scale) if moment < len(values) else None
+
+                    value = figure(main[0], main[2])
+                    if value is None:
+                        continue
+                    sea[main[0]][moment][index] = value
+                    for ours, _, scale in others:
+                        other = figure(ours, scale)
+                        if other is not None and ours == "direction":
+                            other %= 360
+                        sea[ours][moment][index] = other
+
+    if times is None or not any(value is not None for row in sea["value"] for value in row):
+        return None
+    # The service gives the times in UTC without saying so.
+    return {"times": [f"{stamp}:00Z" for stamp in times], **sea}

@@ -80,6 +80,55 @@ Things the deployment must keep true:
   a compose file publishes. Anyone who can reach the back end directly can get
   around the per-visitor limits.
 
+## Waves and wind on the map
+
+Under the map, "Off / Waves / Wind" lays a forecast over the ocean: colour for
+the height of the waves or the strength of the wind, arrows for the way they
+run or blow, a slider for the next seven days in six-hour steps, and the
+figures for a spot when the map is tapped. The same figures are written out
+under the slider for the boat's position (the port of departure before the
+start) and for the most anywhere in the area.
+
+- The data is Open-Meteo's (waves from its marine forecast, wind at ten metres
+  from its weather forecast; the same terms as the weather panel: free for
+  non-commercial use, with attribution). The server fetches each for a grid of
+  points over the area around the **planned route** and keeps it six hours
+  (`GET /api/voyage/sea?layer=waves|wind`); visitors' browsers never call the
+  weather service.
+- The area is worked out from the planned route alone, with a wide margin
+  (`sea_grid` in `backend/services/voyage_core.py`). The boat's position is
+  never part of the request.
+- Every grid point asked for counts as one call against Open-Meteo's free
+  allowance (10,000 a day, 600 a minute, per address). So:
+  - the grid is kept under 580 points: two degrees apart for an Atlantic
+    crossing, coarser for a longer route;
+  - two fetches never begin within two minutes of each other, whatever they are
+    for (waves, wind, a changed route), and never more than 8 in an hour or 14
+    in a day. A page that asks in between is told when to ask again and does so
+    by itself;
+  - each forecast is also kept in the database (`voyage_sea`), with the times
+    fetches began, so a restart of the server costs no fetch. A fetch that
+    cannot be written down there first is not made;
+  - a failing service is asked again after half an hour, then after longer and
+    longer.
+  In normal use that is about 4,400 calls a day when both are being looked at.
+- A page that keeps a forecast on the map asks the server for it again every
+  half hour, within two minutes when the one it got was about to be replaced,
+  and when its tab is come back to. One fetched more than a day ago is not
+  drawn.
+- The service's "bounding box" mode is not used: it returns every cell of a
+  model in the box (about 22,000 for this area) and counts each as a call.
+- Known limits of a two-degree grid: the colour reaches up to a degree over the
+  coast, islands smaller than the grid are painted over, and wind is drawn over
+  land as well.
+- Not offered before a voyage is saved, after arrival, or for a route across the
+  date line.
+- Code: `frontend/src/lib/seaField.ts` (blending between grid points, colour
+  scales, the picture), `frontend/src/components/voyage/seaLayer.ts` (the map
+  layer), `frontend/src/components/voyage/SeaControls.tsx` (choice, slider,
+  scale). Local development uses a made-up field (`backend/dev_server.py`); set
+  `VOYAGE_DEV_REAL_SEA=1` to fetch the real one.
+
 ## Setting up the voyage
 
 In `/voyage/admin`:

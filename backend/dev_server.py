@@ -188,7 +188,51 @@ async def prepare(demo: bool) -> None:
         await seed_demo()
 
 
+async def made_up_sea(grid: dict, layer: str = "waves", now=None) -> dict:
+    """Waves and wind out of a formula, so that local work costs the weather service nothing.
+
+    Every real fetch is several hundred calls against its daily allowance. Set
+    VOYAGE_DEV_REAL_SEA=1 to see the real forecast instead.
+    """
+    interval = core.SEA_INTERVAL_H * 3600
+    first = int(time.time() // interval) * interval
+    steps = core.SEA_HOURS // core.SEA_INTERVAL_H
+    sea = {"value": [], "direction": [], "extra": []}
+    for moment in range(steps):
+        value, direction, extra = [], [], []
+        for index in range(grid["rows"] * grid["cols"]):
+            row, col = divmod(index, grid["cols"])
+            lat = grid["south"] + row * grid["step"]
+            lon = grid["west"] + col * grid["step"]
+            swell = math.sin(math.radians(lat * 6 + moment * 18)) + math.cos(
+                math.radians(lon * 4 - moment * 13)
+            )
+            # Waves: none on land, which here is roughly Africa and the north of South America.
+            if layer == "waves" and ((lon > -16.5 and lat < 27.5) or (lon < -61.5 and lat < 11)):
+                value.append(None)
+                direction.append(None)
+                extra.append(None)
+                continue
+            direction.append(round(55 + 45 * math.sin(math.radians(lon * 3 + moment * 22))) % 360)
+            if layer == "waves":
+                value.append(max(3, round(14 + lat / 3 + 8 * swell)))  # tenths of a metre
+                extra.append(round(7 + 2 * math.cos(math.radians(lat * 5))))  # seconds
+            else:
+                knots = max(2, round(13 + lat / 5 + 7 * swell))
+                value.append(knots)
+                extra.append(round(knots * 1.35))  # gusts
+        sea["value"].append(value)
+        sea["direction"].append(direction)
+        sea["extra"].append(extra)
+    times = [core.to_iso(first + moment * interval) for moment in range(steps)]
+    return {"times": times, **sea}
+
+
 if __name__ == "__main__":
+    if not os.getenv("VOYAGE_DEV_REAL_SEA"):
+        core.fetch_sea = made_up_sea
+        # Nothing is asked of the weather service, so there is no allowance to spread out.
+        voyage.SEA_MIN_GAP_S = 0
     with_demo = "--demo" in sys.argv[1:]
     asyncio.run(prepare(with_demo))
     print(f"In-memory voyage API on http://localhost:8002 ({'demo data' if with_demo else 'empty'})")

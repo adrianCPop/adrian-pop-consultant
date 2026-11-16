@@ -195,3 +195,54 @@
 .leaflet-tooltip.voyage-ahead-label::before {
   display: none;
 }
+
+/* The wave forecast laid over the sea. */
+.voyage-sea-field {
+  /* Stretched from a small picture: let the browser smooth it. */
+  image-rendering: auto;
+}
+
+.voyage-sea-arrow {
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+}
+
+.voyage-sea-arrow svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  /* Quiet enough to leave the track and the pins in front. */
+  stroke: hsl(220 40% 97% / 0.78);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The same arrow, wider and dark, underneath: an edge that shows on the light colours of the scale. */
+.voyage-sea-arrow .voyage-sea-arrow__edge {
+  stroke: hsl(228 39% 8% / 0.5);
+  stroke-width: 3.6;
+}
+
+.leaflet-tooltip.voyage-sea-readout {
+  background: hsl(228 39% 8% / 0.94);
+  border: 1px solid hsl(224 19% 28%);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px hsl(228 39% 4% / 0.5);
+  color: hsl(220 31% 94%);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.leaflet-tooltip-top.voyage-sea-readout::before {
+  border-top-color: hsl(224 19% 28%);
+}
+
+.leaflet-tooltip-bottom.voyage-sea-readout::before {
+  border-bottom-color: hsl(224 19% 28%);
+}

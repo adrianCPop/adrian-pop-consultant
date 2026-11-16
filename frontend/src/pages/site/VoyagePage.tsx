@@ -18,13 +18,27 @@ import {
   Wind,
   X,
 } from "lucide-react";
+import SeaControls, { type SeaState } from "@/components/voyage/SeaControls";
+import { forgetSeaSpot } from "@/components/voyage/seaLayer";
 import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { distanceNm, rhumbPathLengthNm, type LatLon } from "@/lib/geo";
+import {
+  nearestStep,
+  sampleSea,
+  seaMax,
+  seaRefreshDue,
+  seaTooOld,
+  type SeaForecast,
+  type SeaLayerName,
+  type SeaSample,
+} from "@/lib/seaField";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import {
+  ApiError,
+  fetchSea,
   fetchVoyage,
   photoUrl,
   type VoyageData,
@@ -38,6 +52,10 @@ import { computeStats, toFixes } from "@/lib/voyageStats";
 import { cn } from "@/lib/utils";
 
 const REFRESH_MS = 5 * 60_000;
+/** How many times a forecast that is "on its way" is asked for before giving up. */
+const SEA_TRIES = 4;
+/** The server spaces its fetches two minutes apart. Told to wait much longer, the page says it failed instead. */
+const SEA_LONGEST_WAIT_S = 180;
 const DAY_MS = 86_400_000;
 /** Past this long without a position, the status dot turns amber. */
 const QUIET_MS = 24 * 3_600_000;
@@ -212,6 +230,20 @@ const VoyagePage = () => {
   const [lightbox, setLightbox] = useState<{ photo: VoyagePhotoRef; entry: VoyageEntry } | null>(
     null
   );
+  // The forecasts laid over the map (waves, wind). Each is fetched the first time
+  // it is chosen. The moment looked at is kept as a time, not as a step, so that
+  // it stays put when the other forecast is chosen or a newer one arrives.
+  const [seaLayer, setSeaLayer] = useState<SeaLayerName | null>(null);
+  const [seaForecasts, setSeaForecasts] = useState<Partial<Record<SeaLayerName, SeaForecast>>>({});
+  const [seaStates, setSeaStates] = useState<Record<SeaLayerName, SeaState>>({
+    waves: "idle",
+    wind: "idle",
+  });
+  const [seaMoment, setSeaMoment] = useState<number | null>(null);
+  const seaTimers = useRef(new Set<number>());
+  /** For each forecast, when the page last got it and last asked for it. */
+  const seaClock = useRef<Partial<Record<SeaLayerName, { gotAt: number; askedAt: number }>>>({});
+  const mounted = useRef(true);
   /** The entry opened over the page from the map, and which of its photos is shown large. */
   const [opened, setOpened] = useState<{ id: string; photo: number } | null>(null);
   /** Set when the overlay is closed in order to go to the entry in the logbook. */
@@ -247,7 +279,13 @@ const VoyagePage = () => {
       }
     }, REFRESH_MS);
     const tick = window.setInterval(() => setNow(Date.now()), 60_000);
-    const onVisible = () => document.visibilityState === "visible" && void load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        // The clock too: what is shown by age (a forecast on the map) is looked at again.
+        setNow(Date.now());
+        void load();
+      }
+    };
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
@@ -522,6 +560,123 @@ const VoyagePage = () => {
     setFitNonce((value) => value + 1);
   };
 
+  /**
+   * Fetches a forecast. `quietly`: a refresh of one already on the map, which
+   * stays on it if this fails. A forecast the server says is on its way (it
+   * spaces its own requests to the weather service out) is asked for again when
+   * the server says, a few times.
+   *
+   * It depends on nothing that changes, so nothing that calls it is set off
+   * again every time the page's data is refreshed.
+   */
+  const loadSea = useCallback(async (layer: SeaLayerName, quietly = false, triesLeft = SEA_TRIES) => {
+    const setState = (state: SeaState) =>
+      setSeaStates((current) => (current[layer] === state ? current : { ...current, [layer]: state }));
+    if (!quietly) {
+      setState("loading");
+    }
+    seaClock.current[layer] = { gotAt: seaClock.current[layer]?.gotAt ?? 0, askedAt: Date.now() };
+    try {
+      const forecast = await fetchSea(layer);
+      if (!mounted.current) {
+        return;
+      }
+      seaClock.current[layer] = { gotAt: Date.now(), askedAt: Date.now() };
+      setSeaForecasts((current) => ({ ...current, [layer]: forecast }));
+      setState("ready");
+    } catch (error) {
+      if (!mounted.current) {
+        return;
+      }
+      const retryIn =
+        error instanceof ApiError && error.status === 503
+          ? Number((error.body as { retry_in?: unknown } | null)?.retry_in)
+          : Number.NaN;
+      if (retryIn > 0 && retryIn <= SEA_LONGEST_WAIT_S && triesLeft > 1) {
+        if (!quietly) {
+          setState("waiting");
+        }
+        const timer = window.setTimeout(() => {
+          seaTimers.current.delete(timer);
+          void loadSea(layer, quietly, triesLeft - 1);
+        }, retryIn * 1000);
+        seaTimers.current.add(timer);
+      } else if (!quietly) {
+        setState("failed");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const timers = seaTimers.current;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
+
+  const chooseSea = (layer: SeaLayerName | null) => {
+    setSeaLayer(layer);
+    if (layer === null) {
+      forgetSeaSpot();
+    } else if (seaStates[layer] === "idle" || seaStates[layer] === "failed") {
+      void loadSea(layer);
+    }
+  };
+
+  // After landfall there is no forecast, and nothing left to switch one off with.
+  const seaOffered = Boolean(data?.sea) && status !== "arrived";
+  const seaLoaded = seaOffered && seaLayer ? seaForecasts[seaLayer] ?? null : null;
+  // One fetched more than a day ago is not drawn as the days ahead, even if it is all there is.
+  const seaForecast = seaLoaded && !seaTooOld(seaLoaded, serverNow) ? seaLoaded : null;
+  const seaState: SeaState = !seaLayer
+    ? "idle"
+    : seaLoaded && !seaForecast && seaStates[seaLayer] === "ready"
+      ? "loading"
+      : seaStates[seaLayer];
+  const seaShown = seaForecast !== null && seaState === "ready";
+  const seaStep = seaForecast ? nearestStep(seaForecast.times, seaMoment ?? serverNow) : 0;
+
+  // The forecast on the map is asked for again when it is due: looked at every
+  // minute, when the tab is come back to, and when a forecast is chosen.
+  useEffect(() => {
+    const clock = seaLayer ? seaClock.current[seaLayer] : undefined;
+    if (!seaLayer || !seaLoaded || !clock || document.visibilityState !== "visible") {
+      return;
+    }
+    if (seaRefreshDue(seaLoaded, { ...clock, now: Date.now(), serverNow })) {
+      // One too old to show is not on the map, so the visitor is told it is loading.
+      void loadSea(seaLayer, !seaTooOld(seaLoaded, serverNow));
+    }
+  }, [now, seaLayer, seaLoaded, serverNow, loadSea]);
+
+  /** The figures of a forecast at one spot, in words. */
+  const describeSea = (sample: SeaSample, forecast: SeaForecast) => {
+    const direction = sample.fromDeg === null ? null : compass(sample.fromDeg);
+    if (forecast.layer === "wind") {
+      const speed = t("unit.knots", { value: texts.number(sample.value) });
+      if (direction === null) {
+        return speed;
+      }
+      return sample.extra === null
+        ? t("public.sea.windAt", { speed, direction })
+        : t("public.sea.windAtGusts", {
+            speed,
+            direction,
+            gusts: t("unit.knots", { value: texts.number(sample.extra) }),
+          });
+    }
+    const height = t("unit.metres", { value: texts.number(sample.value, 1) });
+    if (direction === null) {
+      return height;
+    }
+    return sample.extra === null
+      ? t("public.sea.wavesAt", { height, direction })
+      : t("public.sea.wavesAtPeriod", { height, direction, seconds: Math.round(sample.extra) });
+  };
+
   if (!data) {
     return (
       <div lang={texts.htmlLang} className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
@@ -573,6 +728,32 @@ const VoyagePage = () => {
 
   const originName = portName(voyage.origin);
   const destinationName = portName(voyage.destination);
+
+  // The forecast in words for the time shown, for anyone who cannot point at the
+  // map: at the boat while it is under way (a position the page shows anyway),
+  // off the port of departure before that, and the most anywhere in the area.
+  const seaSummary: string[] = [];
+  if (seaShown && seaForecast) {
+    const atBoat = status === "under_way" && stats !== null;
+    const place: LatLon = atBoat ? stats.position : [voyage.origin.lat, voyage.origin.lon];
+    const there = sampleSea(seaForecast, seaStep, place[0], place[1]);
+    if (there) {
+      const figures = describeSea(there, seaForecast);
+      seaSummary.push(
+        atBoat
+          ? t("public.sea.atBoat", { figures })
+          : t("public.sea.atPort", { port: originName, figures })
+      );
+    }
+    const most = seaMax(seaForecast, seaStep);
+    if (most !== null) {
+      seaSummary.push(
+        seaForecast.layer === "wind"
+          ? t("public.sea.strongest", { figure: t("unit.knots", { value: texts.number(most) }) })
+          : t("public.sea.highest", { figure: t("unit.metres", { value: texts.number(most, 1) }) })
+      );
+    }
+  }
   const origin: LatLon = [voyage.origin.lat, voyage.origin.lon];
   const sinceFix = stats ? serverNow - stats.positionTime : null;
   const quiet = sinceFix !== null && sinceFix > QUIET_MS;
@@ -721,6 +902,8 @@ const VoyagePage = () => {
           fitNonce={fitNonce}
           viewRef={mapViewRef}
           onSelect={openEntry}
+          sea={seaShown && seaForecast ? { forecast: seaForecast, step: seaStep } : null}
+          describeSea={describeSea}
         />
 
         {stats ? (
@@ -819,6 +1002,23 @@ const VoyagePage = () => {
           </button>
         )}
       </section>
+
+      {seaOffered ? (
+        <SeaControls
+          className="mt-3"
+          layer={seaLayer}
+          onLayer={chooseSea}
+          state={seaState}
+          onRetry={() => seaLayer && void loadSea(seaLayer)}
+          times={seaForecast?.times ?? []}
+          step={seaStep}
+          onStep={(step) =>
+            seaForecast?.times[step] && setSeaMoment(Date.parse(seaForecast.times[step]))
+          }
+          now={serverNow}
+          summary={seaSummary}
+        />
+      ) : null}
 
       {stats ? (
         <>

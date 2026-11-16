@@ -1,5 +1,6 @@
 /** Client for the voyage tracker API (backend/routes/voyage.py). */
 import type { LatLon } from "@/lib/geo";
+import { isSeaForecast, type SeaForecast, type SeaLayerName } from "@/lib/seaField";
 
 export interface VoyagePort {
   name: string;
@@ -60,6 +61,8 @@ export interface VoyageData {
   track: [number, number, number][];
   entries: VoyageEntry[];
   weather: VoyageWeather | null;
+  /** Whether there are forecasts to lay over the map (waves, wind). */
+  sea?: boolean;
 }
 
 export interface CrewIdentity {
@@ -164,6 +167,20 @@ export const photoUrl = (id: string, size: "thumb" | "full" = "full") =>
 // ---- public
 
 export const fetchVoyage = () => request<VoyageData>("");
+
+/**
+ * Waves or wind over the ocean around the planned route, for the map's overlay.
+ * When the server answers 503 with `retry_in` in the body, the forecast is on
+ * its way and worth asking for again after that many seconds.
+ */
+export const fetchSea = async (layer: SeaLayerName): Promise<SeaForecast> => {
+  const forecast = await request<unknown>(`/sea?layer=${layer}`, {}, 30_000);
+  // A 200 is not always the server's: a harbour Wi-Fi's sign-in page answers 200 too.
+  if (!isSeaForecast(forecast) || forecast.layer !== layer) {
+    throw new ApiError(502, "The server answered 502");
+  }
+  return forecast;
+};
 
 // ---- crew (secret link)
 
