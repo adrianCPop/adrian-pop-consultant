@@ -263,11 +263,97 @@ def test_under_way_without_a_position_there_is_no_weather(ctx, monkeypatch):
 
 
 def test_after_arrival_there_is_no_weather(ctx, monkeypatch):
+    ctx.configure(departure_h=-48)
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    ctx.fix(tracker, LAT, LON, NOW - 8 * HOUR)  # a position there would be weather for
     ctx.configure(departure_h=-48, arrived_at=iso(NOW - 5 * HOUR))
     data, asked = weather_after_refresh(ctx, monkeypatch)
     assert data["status"] == "arrived"
+    assert len(data["track"]) == 1
     assert data["weather"] is None
     assert asked == []
+
+
+def test_before_departure_real_positions_never_reach_the_weather_service(ctx, monkeypatch):
+    # The boat (or the crew, at home) is somewhere else before departure. Only the
+    # port may be asked about, whatever has been sent in.
+    ctx.configure(departure_h=+72)
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    crew = ctx.make_key("Adrian", "crew")["key"]
+    assert ctx.fix(tracker, 45.0, 25.0, NOW - 60).status_code == 200
+    body = entry_body(position={"lat": 45.01, "lon": 25.01, "accuracy": 5})
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(crew)).status_code == 200
+
+    data, asked = weather_after_refresh(ctx, monkeypatch)
+    assert data["status"] == "planned"
+    assert data["weather"] is not None
+    assert asked == [(28.13, -15.43)]
+    assert data["track"] == []
+    assert [entry["pos"] for entry in data["entries"]] == [None]
+
+
+def test_a_forecast_too_old_to_call_current_is_not_shown(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    old, _ = weather_after_refresh(ctx, monkeypatch, {"wind_kn": 30.0})
+    assert old["weather"] == {"wind_kn": 30.0}
+
+    # Nobody looks at the page for three hours.
+    for entry in voyage_routes._weather_cache.values():
+        entry["checked"] -= 3 * HOUR
+        entry["fetched"] -= 3 * HOUR
+    voyage_routes._changed()
+
+    shown = []
+
+    async def later_weather(lat, lon):
+        return {"wind_kn": 8.0}
+
+    monkeypatch.setattr(voyage_core, "fetch_weather", later_weather)
+    for _ in range(40):
+        shown.append(ctx.public()["weather"])
+        if shown[-1] is not None:
+            break
+        time.sleep(0.05)
+    # The first visitor after the gap may get nothing, never the three-hour-old one.
+    assert {"wind_kn": 30.0} not in shown
+    assert shown[-1] == {"wind_kn": 8.0}
+
+
+def test_a_failing_weather_service_is_asked_once_not_at_every_visit(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    calls = []
+
+    async def broken_weather(lat, lon):
+        calls.append((lat, lon))
+        raise RuntimeError("the weather service is down")
+
+    monkeypatch.setattr(voyage_core, "fetch_weather", broken_weather)
+    for _ in range(6):
+        voyage_routes._changed()  # each visit rebuilds the page
+        assert ctx.public()["weather"] is None
+        time.sleep(0.05)
+    assert len(calls) == 1
+
+
+def test_a_forecast_survives_one_failed_refresh(ctx, monkeypatch):
+    ctx.configure(departure_h=+72)
+    good, _ = weather_after_refresh(ctx, monkeypatch, {"wind_kn": 12.0})
+    assert good["weather"] == {"wind_kn": 12.0}
+
+    # Forty minutes on, the refresh fails. The forecast is still under two hours old.
+    for entry in voyage_routes._weather_cache.values():
+        entry["checked"] -= 40 * 60
+        entry["fetched"] -= 40 * 60
+    voyage_routes._changed()
+
+    async def broken_weather(lat, lon):
+        raise RuntimeError("the weather service is down")
+
+    monkeypatch.setattr(voyage_core, "fetch_weather", broken_weather)
+    for _ in range(5):
+        assert ctx.public()["weather"] == {"wind_kn": 12.0}
+        voyage_routes._changed()
+        time.sleep(0.05)
 
 
 # --------------------------------------------------------------------------- admin

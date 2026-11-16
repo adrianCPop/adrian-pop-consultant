@@ -70,6 +70,9 @@ ADMIN_SESSION_S = 12 * 3600
 PUBLIC_CACHE_S = 15
 WEATHER_TTL_S = 30 * 60
 WEATHER_RETRY_S = 5 * 60
+# A forecast fetched longer ago than this is not shown: the page presents it as the
+# weather now, and on a quiet day the last one fetched can be many hours old.
+WEATHER_MAX_AGE_S = 2 * 3600
 WEATHER_MAX_FIX_AGE_S = 48 * 3600
 
 # In production a request passes Traefik, then the front end's nginx. Each appends
@@ -536,33 +539,53 @@ async def get_photo(photo_id: str, size: str = "full", db=Depends(get_db)):
 
 
 async def _refresh_weather(spot, lat: float, lon: float) -> None:
+    now = time.monotonic()
+    previous = _weather_cache.get(spot) or {}
+    # Unless the service answers with a forecast, the last one is kept (it may still
+    # be recent enough to show) and the failure is noted, so that the service is
+    # asked again after the retry period and not at every visit.
+    entry = {
+        "checked": now,
+        "ok": False,
+        "weather": previous.get("weather"),
+        "fetched": previous.get("fetched", now),
+    }
     try:
         weather = await core.fetch_weather(lat, lon)
-        if len(_weather_cache) > 500:
-            _weather_cache.clear()
-        _weather_cache[spot] = (time.monotonic(), weather)
         if weather:
-            _changed()
+            entry.update({"ok": True, "weather": weather, "fetched": now})
     except Exception as error:
         logger.warning("Weather refresh failed: %s", error)
     finally:
+        if len(_weather_cache) > 500:
+            _weather_cache.clear()
+        _weather_cache[spot] = entry
         _weather_pending.discard(spot)
+    if entry["ok"]:
+        _changed()
 
 
 def _weather_for(lat: float, lon: float) -> Optional[dict]:
-    """The cached forecast for a spot. Refreshed in the background, so no visitor
-    ever waits for the weather service, and it is asked once however many are looking."""
+    """The cached forecast for a spot, if it is recent enough to pass for "now".
+
+    Refreshed in the background, so no visitor ever waits for the weather service,
+    and it is asked once however many are looking. The first visitor after a long
+    quiet spell therefore gets no forecast rather than a stale one; the next does.
+    """
     spot = (round(lat * 4), round(lon * 4))
     hit = _weather_cache.get(spot)
-    fresh = hit is not None and time.monotonic() - hit[0] < (
-        WEATHER_TTL_S if hit[1] else WEATHER_RETRY_S
+    now = time.monotonic()
+    fresh = hit is not None and now - hit["checked"] < (
+        WEATHER_TTL_S if hit["ok"] else WEATHER_RETRY_S
     )
     if not fresh and spot not in _weather_pending:
         _weather_pending.add(spot)
         task = asyncio.create_task(_refresh_weather(spot, lat, lon))
         _background.add(task)
         task.add_done_callback(_background.discard)
-    return hit[1] if hit else None
+    if hit and hit["weather"] and now - hit["fetched"] < WEATHER_MAX_AGE_S:
+        return hit["weather"]
+    return None
 
 
 def _public_settings(main: dict) -> dict:
