@@ -188,10 +188,15 @@ const VoyageMap = ({
       interactive: false,
     }).addTo(map);
 
+    // The eastern port sits near the right edge, under the legend. Its name goes to
+    // the left of the dot, so a long one is neither covered nor cut off by the edge.
+    const easternPort = from.pos[1] >= to.pos[1] ? from : to;
+
     [from, to].forEach((port) => {
       // Leaflet treats a string as HTML, so hand it an element with plain text.
       const label = document.createElement("span");
       label.textContent = port.name;
+      const toTheLeft = port === easternPort;
 
       L.circleMarker(port.pos, {
         radius: 4.5,
@@ -203,8 +208,8 @@ const VoyageMap = ({
       })
         .bindTooltip(label, {
           permanent: true,
-          direction: "top",
-          offset: [0, -14],
+          direction: toTheLeft ? "left" : "top",
+          offset: toTheLeft ? [-8, 0] : [0, -14],
           className: "voyage-label",
         })
         .addTo(map);
