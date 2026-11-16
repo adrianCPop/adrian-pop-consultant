@@ -3,12 +3,16 @@ import type { LatLon } from "@/lib/geo";
 
 export interface VoyagePort {
   name: string;
+  /** The name on the Romanian page. Empty or missing: the same as `name`. */
+  name_ro?: string;
   lat: number;
   lon: number;
 }
 
 export interface VoyageSettings {
   eyebrow: string;
+  /** The small heading on the Romanian page. Empty or missing: the same as `eyebrow`. */
+  eyebrow_ro?: string;
   boat_name: string;
   origin: VoyagePort;
   destination: VoyagePort;

@@ -509,6 +509,69 @@ def test_settings_are_validated(ctx):
     assert res.status_code == 422
 
 
+# --------------------------------------------------------------------------- Romanian names
+
+
+def test_romanian_names_reach_the_public_page_and_the_admin_form(ctx):
+    ctx.configure(
+        eyebrow_ro="  Traversarea Atlanticului  ",
+        origin={"name": "Las Palmas", "name_ro": "", "lat": 28.13, "lon": -15.43},
+        destination={"name": "Caribbean", "name_ro": " Caraibe ", "lat": 14.08, "lon": -60.95},
+    )
+
+    public = ctx.client.get("/api/voyage").json()["voyage"]
+    admin = ctx.client.get("/api/voyage/admin/state", headers=ctx.admin).json()["settings"]
+    for voyage in (public, admin):
+        assert voyage["eyebrow"] == "Atlantic crossing"
+        assert voyage["eyebrow_ro"] == "Traversarea Atlanticului"
+        assert voyage["destination"]["name"] == "Caribbean"
+        assert voyage["destination"]["name_ro"] == "Caraibe"
+        assert voyage["origin"]["name_ro"] == ""
+
+
+def test_a_voyage_saved_without_romanian_names_has_none(ctx):
+    # As an admin page loaded before these fields existed would send it.
+    ctx.configure()
+
+    voyage = ctx.client.get("/api/voyage").json()["voyage"]
+    assert voyage["eyebrow_ro"] == ""
+    assert voyage["origin"] == {"name": "Las Palmas", "name_ro": "", "lat": 28.13, "lon": -15.43}
+
+
+def test_a_voyage_stored_before_romanian_names_existed_is_still_published():
+    stored = {
+        "eyebrow": "Atlantic crossing",
+        "origin": {"name": "Las Palmas", "lat": 28.13, "lon": -15.43},
+        "destination": {"name": "Saint Lucia", "lat": 14.08, "lon": -60.95},
+    }
+    voyage = voyage_routes._public_settings(stored)
+    assert voyage["eyebrow_ro"] == ""
+    assert voyage["origin"]["name"] == "Las Palmas"
+
+
+def test_romanian_names_are_no_longer_than_the_others(ctx):
+    body = {
+        "eyebrow": "",
+        "boat_name": "",
+        "origin": {"name": "A", "lat": 0, "lon": 0},
+        "destination": {"name": "B", "name_ro": "x" * 61, "lat": 1, "lon": 1},
+        "departure": None,
+        "arrived_at": None,
+        "planned_route": [],
+    }
+    res = ctx.client.put("/api/voyage/admin/settings", json=body, headers=ctx.admin)
+    assert res.status_code == 422
+
+    body["destination"]["name_ro"] = "x" * 60
+    body["eyebrow_ro"] = "x" * 81
+    res = ctx.client.put("/api/voyage/admin/settings", json=body, headers=ctx.admin)
+    assert res.status_code == 422
+
+    body["eyebrow_ro"] = "x" * 80
+    res = ctx.client.put("/api/voyage/admin/settings", json=body, headers=ctx.admin)
+    assert res.status_code == 200
+
+
 # --------------------------------------------------------------------------- keys
 
 

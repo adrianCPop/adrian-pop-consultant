@@ -591,6 +591,10 @@ def _weather_for(lat: float, lon: float) -> Optional[dict]:
 def _public_settings(main: dict) -> dict:
     return {
         "eyebrow": main.get("eyebrow", ""),
+        # The pages come in English and Romanian. The small heading and each port
+        # (`name_ro`, inside the port) can have a Romanian version; empty means
+        # the Romanian page shows the first one.
+        "eyebrow_ro": main.get("eyebrow_ro", ""),
         "boat_name": main.get("boat_name", ""),
         "origin": main["origin"],
         "destination": main["destination"],
@@ -824,12 +828,14 @@ async def admin_state(_: dict = Depends(require_admin), db=Depends(get_db)):
 
 class PortIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
+    name_ro: str = Field("", max_length=60)
     lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
     lon: float = Field(ge=-180, le=180, allow_inf_nan=False)
 
 
 class SettingsIn(BaseModel):
     eyebrow: str = Field("", max_length=80)
+    eyebrow_ro: str = Field("", max_length=80)
     boat_name: str = Field("", max_length=80)
     origin: PortIn
     destination: PortIn
@@ -862,6 +868,8 @@ async def save_settings(payload: SettingsIn, _: dict = Depends(require_admin), d
         raise HTTPException(422, "A route point is outside the map")
     route = [[round(lat, 5), round(lon, 5)] for lat, lon in route]
     origin, destination = payload.origin.model_dump(), payload.destination.model_dump()
+    for port in (origin, destination):
+        port["name_ro"] = port["name_ro"].strip()
     if len(route) < 2:
         route = [[origin["lat"], origin["lon"]], [destination["lat"], destination["lon"]]]
 
@@ -870,6 +878,7 @@ async def save_settings(payload: SettingsIn, _: dict = Depends(require_admin), d
         {
             "$set": {
                 "eyebrow": payload.eyebrow.strip(),
+                "eyebrow_ro": payload.eyebrow_ro.strip(),
                 "boat_name": payload.boat_name.strip(),
                 "origin": origin,
                 "destination": destination,

@@ -22,9 +22,12 @@ const SiteLayout = () => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [location.hash, location.pathname]);
 
+  // The voyage pages stand on their own: the consulting site's navigation is left off them.
+  const onVoyage = location.pathname === "/voyage" || location.pathname.startsWith("/voyage/");
+
   return (
     <div className="site-shell min-h-screen bg-background text-foreground">
-      <SiteHeader />
+      {onVoyage ? null : <SiteHeader />}
       <main className="relative z-10">
         <Outlet />
       </main>

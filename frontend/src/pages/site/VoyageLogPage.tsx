@@ -21,8 +21,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCoord } from "@/lib/geo";
+import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
 import { useCrewOnlyPage } from "@/lib/useCrewOnlyPage";
+import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import { ApiError, fetchMe, type DevicePosition } from "@/lib/voyageApi";
 import {
   addItem,
@@ -124,22 +125,13 @@ const shrinkPhoto = async (file: File): Promise<DraftPhoto> => {
   };
 };
 
-const kb = (value: number) =>
-  value >= 1024 ? `${(value / 1024).toFixed(1)} MB` : `${Math.round(value)} KB`;
-
-const localTime = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-
 const isStandalone = () =>
   window.matchMedia("(display-mode: standalone)").matches ||
   (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 const VoyageLogPage = () => {
+  const texts = useVoyageTexts();
+  const { t } = texts;
   const [key, setKey] = useState<string | null>(
     () => extractKey(window.location.hash) ?? readStore(KEY_STORE)
   );
@@ -160,7 +152,7 @@ const VoyageLogPage = () => {
 
   const [gpsOn, setGpsOn] = useState(() => readStore(GPS_STORE) === "on");
   const [gps, setGps] = useState<GpsFix | null>(null);
-  const [gpsProblem, setGpsProblem] = useState<string | null>(null);
+  const [gpsProblem, setGpsProblem] = useState<"blocked" | "unavailable" | null>(null);
   const [, setGpsTick] = useState(0);
 
   useCrewOnlyPage();
@@ -330,11 +322,7 @@ const VoyageLogPage = () => {
           at: position.timestamp,
         }),
       (error) =>
-        setGpsProblem(
-          error.code === error.PERMISSION_DENIED
-            ? "Location is blocked for this page. Allow it in the browser's settings."
-            : "This device could not find its position."
-        ),
+        setGpsProblem(error.code === error.PERMISSION_DENIED ? "blocked" : "unavailable"),
       { enableHighAccuracy: true, maximumAge: 60_000, timeout: 30_000 }
     );
     // Redraw now and then, so a position that has gone stale stops being offered.
@@ -356,6 +344,9 @@ const VoyageLogPage = () => {
   };
   const goodGps = usableGps();
 
+  const kb = (value: number) =>
+    value >= 1024 ? `${texts.number(value / 1024, 1)} MB` : `${texts.number(value)} KB`;
+
   const toggleGps = (on: boolean) => {
     setGpsOn(on);
     writeStore(GPS_STORE, on ? "on" : null);
@@ -365,12 +356,12 @@ const VoyageLogPage = () => {
     event.preventDefault();
     const found = extractKey(pasted);
     if (!found) {
-      toast.error("That does not look like a personal link");
+      toast.error(t("log.link.notALink"));
       return;
     }
     setPasted("");
     if (found === key) {
-      toast.error("That is the same link, and it is switched off");
+      toast.error(t("log.link.sameLink"));
       return;
     }
     window.history.replaceState(null, "", `${window.location.pathname}#k=${found}`);
@@ -399,7 +390,7 @@ const VoyageLogPage = () => {
       try {
         shrunk.push(await shrinkPhoto(file));
       } catch {
-        toast.error(`Could not read ${file.name}`);
+        toast.error(t("log.photos.unreadable", { file: file.name }));
       }
     }
     setPhotos((current) => [...current, ...shrunk]);
@@ -416,7 +407,7 @@ const VoyageLogPage = () => {
   const saveEntry = async (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim() && !body.trim() && photos.length === 0) {
-      toast.error("Write something or add a photo first");
+      toast.error(t("log.entry.empty"));
       return;
     }
 
@@ -435,7 +426,7 @@ const VoyageLogPage = () => {
         photos.map((photo) => ({ id: photo.id, blob: photo.blob }))
       );
     } catch {
-      toast.error("Could not save on this device. Its storage may be full.");
+      toast.error(t("log.entry.notSaved"));
       return;
     }
 
@@ -444,14 +435,14 @@ const VoyageLogPage = () => {
     setBody("");
     setPhotos([]);
     await refreshItems();
-    toast.success("Saved on this device", { description: "It is sent as soon as there is a connection." });
+    toast.success(t("log.entry.saved"), { description: t("log.entry.savedDetail") });
     void checkAndSend();
   };
 
   const sendPositionOnly = async () => {
     const position = usableGps();
     if (!position) {
-      toast.error("No fresh GPS position right now");
+      toast.error(t("log.position.none"));
       return;
     }
     await addItem(
@@ -468,12 +459,12 @@ const VoyageLogPage = () => {
       []
     );
     await refreshItems();
-    toast.success("Position saved");
+    toast.success(t("log.position.saved"));
     void checkAndSend();
   };
 
   const discard = async (item: OutboxItem) => {
-    if (!window.confirm("Throw this entry away? It has not been sent.")) {
+    if (!window.confirm(t("log.outbox.discardConfirm"))) {
       return;
     }
     await removeItem(item.id);
@@ -486,43 +477,45 @@ const VoyageLogPage = () => {
     const waiting = items.filter((item) => item.status === "waiting").length;
 
     return (
-      <div className="mx-auto w-full max-w-md px-4 py-10 sm:py-14">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Crew only</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">Ship's log</h1>
+      <div lang={texts.htmlLang} className="mx-auto w-full max-w-md px-4 py-10 sm:py-14">
+        <div className="flex items-start justify-between gap-4">
+          <p className="pt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+            {t("log.crewOnly")}
+          </p>
+          <VoyageLanguageSwitch />
+        </div>
+        <h1 className="mt-2 font-heading text-3xl font-semibold">{t("log.title")}</h1>
 
         <form onSubmit={openWithLink} className="panel-soft mt-6 rounded-2xl p-5">
           <div className="flex items-center gap-2.5">
             <KeyRound className="h-5 w-5 text-primary" />
             <h2 className="font-heading text-base font-semibold text-foreground">
-              {link === "revoked" && key ? "This link has been switched off" : "Open with your personal link"}
+              {link === "revoked" && key ? t("log.link.off") : t("log.link.open")}
             </h2>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            {link === "revoked" && key
-              ? "Ask for a new one, then paste it here."
-              : "Each person on board has their own link. Open it, or paste it here. You only do this once on each device."}
+            {link === "revoked" && key ? t("log.link.askNew") : t("log.link.explain")}
           </p>
           {waiting > 0 ? (
             <p className="mt-2 text-sm leading-relaxed text-foreground">
-              {waiting} unsent {waiting === 1 ? "entry is" : "entries are"} still safe on this
-              device and will go out with the new link.
+              {t("log.link.unsent", { count: waiting })}
             </p>
           ) : null}
           <Label htmlFor="personal-link" className="sr-only">
-            Personal link
+            {t("log.link.field")}
           </Label>
           <Input
             id="personal-link"
             value={pasted}
             onChange={(event) => setPasted(event.target.value)}
-            placeholder="Paste your link"
+            placeholder={t("log.link.paste")}
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
             className="mt-4 h-11 rounded-xl border-border/80 bg-secondary/50"
           />
           <Button type="submit" className="mt-3 h-11 w-full rounded-xl text-sm font-semibold">
-            Open the log
+            {t("log.link.submit")}
           </Button>
         </form>
       </div>
@@ -535,43 +528,48 @@ const VoyageLogPage = () => {
   const shownItems = [...items].reverse();
   const online = link === "online";
 
-  let connectionTitle = "Checking the connection";
-  let connectionDetail = "One moment.";
+  let connectionTitle = t("log.connection.checking");
+  let connectionDetail = t("log.connection.moment");
   if (frozen) {
-    connectionTitle = "The log is paused";
-    connectionDetail = "The shore contact has paused sending. Keep writing; entries wait here safely.";
+    connectionTitle = t("log.connection.paused");
+    connectionDetail = t("log.connection.pausedDetail");
   } else if (online) {
-    connectionTitle = sendingId ? "Sending" : "Connected";
+    connectionTitle = sendingId ? t("log.connection.sending") : t("log.connection.connected");
     connectionDetail = serverTrouble
-      ? "The server could not take everything yet. What is left stays here and is tried again."
+      ? t("log.connection.trouble")
       : waitingItems.length > 0
-        ? `${waitingItems.length} waiting to go.`
-        : "Everything on this device has been sent.";
+        ? t("log.connection.waiting", { count: waitingItems.length })
+        : t("log.connection.allSent");
   } else if (link === "offline") {
-    connectionTitle = "No connection";
+    connectionTitle = t("log.connection.none");
     connectionDetail =
       waitingItems.length > 0
-        ? `${waitingItems.length} waiting here. They go out by themselves once the dish is on and this page is open.`
-        : "Keep writing. Entries are saved on this device and sent once the dish is on.";
+        ? t("log.connection.waitingOffline", { count: waitingItems.length })
+        : t("log.connection.keepWriting");
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <div lang={texts.htmlLang} className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Crew only</p>
-          <h1 className="mt-2 font-heading text-3xl font-semibold">Ship's log</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+            {t("log.crewOnly")}
+          </p>
+          <h1 className="mt-2 font-heading text-3xl font-semibold">{t("log.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {name ? `Writing as ${name}.` : "Your name appears once the link has been checked."}
+            {name ? t("log.writingAs", { name }) : t("log.nameComes")}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={forgetLink}
-          className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Not {name ?? "you"}? Use another link
-        </button>
+        <div className="flex flex-col items-end gap-3">
+          <VoyageLanguageSwitch />
+          <button
+            type="button"
+            onClick={forgetLink}
+            className="text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {name ? t("log.notYou", { name }) : t("log.notYouUnnamed")}
+          </button>
+        </div>
       </header>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1.25fr_1fr] lg:grid-rows-[auto_1fr] lg:items-start">
@@ -610,7 +608,7 @@ const VoyageLogPage = () => {
                 onClick={() => void checkAndSend()}
                 disabled={sendingId !== null}
               >
-                Try now
+                {t("log.connection.tryNow")}
               </Button>
             </div>
           </section>
@@ -618,15 +616,16 @@ const VoyageLogPage = () => {
           {!durable ? (
             <p className="flex items-start gap-2.5 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 text-xs leading-relaxed text-amber-200">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              This browser will not keep entries after the page is closed (private window?). Use a
-              normal window, or stay on this page until everything shows as sent.
+              {t("log.notDurable")}
             </p>
           ) : null}
 
         </div>
 
         <form onSubmit={saveEntry} className="panel-soft rounded-2xl p-5 sm:p-6 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          <h2 className="font-heading text-lg font-semibold text-foreground">New entry</h2>
+          <h2 className="font-heading text-lg font-semibold text-foreground">
+            {t("log.entry.new")}
+          </h2>
 
           <div className="mt-4 rounded-xl border border-border/70 bg-secondary/40 p-3">
             <div className="flex items-start gap-3">
@@ -635,24 +634,25 @@ const VoyageLogPage = () => {
                 {goodGps ? (
                   <>
                     <p className="font-heading text-sm font-semibold tabular-nums text-foreground">
-                      {formatCoord([goodGps.lat, goodGps.lon])}
+                      {texts.coord([goodGps.lat, goodGps.lon])}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      From this device's GPS, accurate to {goodGps.accuracy} m.
+                      {t("log.gps.accurate", { accuracy: goodGps.accuracy })}
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-sm font-semibold text-foreground">
-                      Position comes from the boat's track
+                      {t("log.gps.fromTrack")}
                     </p>
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                      {gpsProblem ??
-                        (gpsOn
+                      {gpsProblem
+                        ? t(gpsProblem === "blocked" ? "log.gps.blocked" : "log.gps.unavailable")
+                        : gpsOn
                           ? gps
-                            ? "This device only has a rough position, so the entry is placed where the tracker says the boat was."
-                            : "Looking for a GPS position."
-                          : "The entry is placed where the tracker says the boat was when you saved it.")}
+                            ? t("log.gps.rough")
+                            : t("log.gps.looking")
+                          : t("log.gps.off")}
                     </p>
                   </>
                 )}
@@ -660,7 +660,7 @@ const VoyageLogPage = () => {
             </div>
             <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
               <Label htmlFor="use-gps" className="text-xs font-medium text-muted-foreground">
-                Use this device's GPS (phones)
+                {t("log.gps.use")}
               </Label>
               <Switch id="use-gps" checked={gpsOn} onCheckedChange={toggleGps} />
             </div>
@@ -668,21 +668,21 @@ const VoyageLogPage = () => {
 
           <div className="mt-4 space-y-2">
             <Label htmlFor="log-title" className="text-xs font-semibold uppercase tracking-[0.1em]">
-              Title
+              {t("log.entry.title")}
             </Label>
             <Input
               id="log-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               maxLength={120}
-              placeholder="Flying fish for breakfast"
+              placeholder={t("log.entry.titleExample")}
               className="h-11 rounded-xl border-border/80 bg-secondary/50"
             />
           </div>
 
           <div className="mt-4 space-y-2">
             <Label htmlFor="log-body" className="text-xs font-semibold uppercase tracking-[0.1em]">
-              What happened
+              {t("log.entry.body")}
             </Label>
             <Textarea
               id="log-body"
@@ -690,15 +690,15 @@ const VoyageLogPage = () => {
               onChange={(event) => setBody(event.target.value)}
               maxLength={8000}
               rows={6}
-              placeholder="Wind, sails, what you saw, what broke, what was for dinner."
+              placeholder={t("log.entry.bodyExample")}
               className="rounded-xl border-border/80 bg-secondary/50"
             />
           </div>
 
           <div className="mt-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em]">Photos</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.1em]">{t("log.photos.title")}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Shrunk on this device before sending, to save satellite data.
+              {t("log.photos.note")}
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
               {photos.map((photo) => (
@@ -713,7 +713,7 @@ const VoyageLogPage = () => {
                   <button
                     type="button"
                     onClick={() => removePhoto(photo.id)}
-                    aria-label="Remove photo"
+                    aria-label={t("log.photos.remove")}
                     className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -732,7 +732,7 @@ const VoyageLogPage = () => {
                   ) : (
                     <ImagePlus className="h-5 w-5" />
                   )}
-                  {shrinking ? "Shrinking" : "Add"}
+                  {shrinking ? t("log.photos.shrinking") : t("log.photos.add")}
                 </button>
               ) : null}
             </div>
@@ -744,7 +744,7 @@ const VoyageLogPage = () => {
               className="sr-only"
               onChange={(event) => void pickPhotos(event)}
               tabIndex={-1}
-              aria-label="Add photos"
+              aria-label={t("log.photos.addLabel")}
             />
           </div>
 
@@ -753,7 +753,7 @@ const VoyageLogPage = () => {
             disabled={shrinking}
             className="mt-6 h-12 w-full rounded-xl text-sm font-semibold"
           >
-            Save entry
+            {t("log.entry.save")}
           </Button>
           <Button
             type="button"
@@ -763,21 +763,23 @@ const VoyageLogPage = () => {
             className="mt-3 h-11 w-full rounded-xl text-sm font-semibold"
           >
             <Navigation className="mr-2 h-4 w-4" />
-            Just send my position
+            {t("log.position.send")}
           </Button>
           {!goodGps ? (
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Needs GPS on this device. Switch it on above.
+              {t("log.position.needsGps")}
             </p>
           ) : null}
         </form>
 
         <div className="space-y-4 lg:col-start-2 lg:row-start-2">
           <section className="panel-soft rounded-2xl p-5">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Outbox</h2>
+            <h2 className="font-heading text-lg font-semibold text-foreground">
+              {t("log.outbox.title")}
+            </h2>
             {shownItems.length === 0 ? (
               <p className="mt-2 text-sm text-muted-foreground">
-                Nothing yet. What you save appears here until it has been sent.
+                {t("log.outbox.empty")}
               </p>
             ) : (
               <ul className="mt-3 divide-y divide-border/60">
@@ -807,32 +809,32 @@ const VoyageLogPage = () => {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-foreground">
                           {item.kind === "position"
-                            ? "Position only"
-                            : item.title || item.body.slice(0, 60) || "Photos"}
+                            ? t("log.outbox.positionOnly")
+                            : item.title || item.body.slice(0, 60) || t("log.outbox.photosOnly")}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {localTime(item.createdAt)}
+                          {texts.localStamp(item.createdAt)}
                           {item.photoIds.length > 0
-                            ? ` · ${item.photoIds.length} ${item.photoIds.length === 1 ? "photo" : "photos"}`
+                            ? ` · ${t("common.photos", { count: item.photoIds.length })}`
                             : ""}
                           {" · "}
                           {sending
-                            ? "sending"
+                            ? t("log.outbox.sending")
                             : item.status === "sent"
-                              ? "sent"
+                              ? t("log.outbox.sent")
                               : item.status === "failed"
-                                ? "not sent"
-                                : "waiting"}
+                                ? t("log.outbox.failed")
+                                : t("log.outbox.waiting")}
                         </p>
                         {item.error ? (
-                          <p className="mt-0.5 text-xs text-red-300">{item.error}</p>
+                          <p className="mt-0.5 text-xs text-red-300">{texts.outboxError(item.error)}</p>
                         ) : null}
                       </div>
                       {item.status !== "sent" && !sending ? (
                         <button
                           type="button"
                           onClick={() => void discard(item)}
-                          aria-label="Throw this entry away"
+                          aria-label={t("log.outbox.discard")}
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -850,14 +852,11 @@ const VoyageLogPage = () => {
               <div className="flex items-center gap-2.5">
                 <Smartphone className="h-5 w-5 text-primary" />
                 <h2 className="font-heading text-base font-semibold text-foreground">
-                  Put it on your home screen
+                  {t("log.install.title")}
                 </h2>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                iPhone or iPad: in Safari, tap Share, then Add to Home Screen. Android: open the
-                browser menu, then Add to Home screen. Do it while this page is open with your
-                link, then open the new icon once while still connected. After that the icon
-                opens the log even with the dish off.
+                {t("log.install.body")}
               </p>
             </section>
           ) : null}
