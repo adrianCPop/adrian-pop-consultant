@@ -135,6 +135,18 @@ describe("paintSea, the picture laid over the map", () => {
     expect(bottom[3]).toBeGreaterThan(0);
   });
 
+  it("thins out towards its edges, so the box has no hard border on the map", () => {
+    const even = sea([20, 20, 20, 20, 20, 20, 20, 20, 20]);
+    const pixels = paintSea(even, 0, 100, 100);
+    const middle = pixel(pixels, 100, 50, 50)[3];
+    expect(middle).toBe(Math.round(heightColor(2)[3]));
+    expect(pixel(pixels, 100, 0, 50)[3]).toBeLessThan(middle / 4);
+    expect(pixel(pixels, 100, 50, 99)[3]).toBeLessThan(middle / 4);
+    expect(pixel(pixels, 100, 3, 50)[3]).toBeLessThan(middle);
+    // Well inside, nothing is taken away.
+    expect(pixel(pixels, 100, 20, 20)[3]).toBe(middle);
+  });
+
   it("leaves land clear", () => {
     const coast = sea([10, 10, null, 20, 20, null, 30, 30, null]);
     const pixels = paintSea(coast, 0, 8, 4);

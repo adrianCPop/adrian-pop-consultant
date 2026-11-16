@@ -166,11 +166,15 @@ export const heightColor = (metres: number): [number, number, number, number] =>
 const mercatorY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + toRad(lat) / 2));
 const latitudeAt = (y: number) => ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180) / Math.PI;
 
+/** The picture fades out over this share of its shorter side, so the box has no hard edge on the map. */
+const EDGE_FADE = 0.07;
+
 /**
  * One time step as a picture of the grid's box: `width` x `height` pixels, four
  * numbers each (red, green, blue, how solid). Columns are even in longitude and
  * rows even in Mercator's stretched latitude, which is how a web map lays an
- * image out between two corners. Land is left clear.
+ * image out between two corners. Land is left clear, and the picture thins out
+ * towards its edges.
  */
 export const paintSea = (
   sea: SeaForecast,
@@ -182,6 +186,7 @@ export const paintSea = (
   const { south, west, north, east } = seaBounds(sea);
   const top = mercatorY(north);
   const bottom = mercatorY(south);
+  const fade = Math.max(1, Math.min(width, height) * EDGE_FADE);
 
   for (let y = 0; y < height; y += 1) {
     const lat = latitudeAt(top + ((y + 0.5) / height) * (bottom - top));
@@ -189,7 +194,9 @@ export const paintSea = (
       const lon = west + ((x + 0.5) / width) * (east - west);
       const here = sampleSea(sea, step, lat, lon);
       if (here) {
-        pixels.set(heightColor(here.heightM), (y * width + x) * 4);
+        const [red, green, blue, solid] = heightColor(here.heightM);
+        const fromEdge = Math.min(x + 0.5, width - x - 0.5, y + 0.5, height - y - 0.5);
+        pixels.set([red, green, blue, solid * Math.min(1, fromEdge / fade)], (y * width + x) * 4);
       }
     }
   }

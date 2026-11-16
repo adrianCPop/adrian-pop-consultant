@@ -80,6 +80,31 @@ Things the deployment must keep true:
   a compose file publishes. Anyone who can reach the back end directly can get
   around the per-visitor limits.
 
+## Waves on the map
+
+A switch under the map lays the wave forecast over the ocean: colour for the
+height of the waves, arrows for the way they run, a slider for the next seven
+days in six-hour steps, and the figures for a spot when the sea is tapped.
+
+- The data is Open-Meteo's marine forecast (the same terms as the weather panel:
+  free for non-commercial use, with attribution). The server fetches it for a
+  grid of points over the area around the **planned route** and keeps it six
+  hours (`GET /api/voyage/sea`); visitors' browsers never call the weather service.
+- The area is worked out from the planned route alone, with a wide margin
+  (`sea_grid` in `backend/services/voyage_core.py`). The boat's position is
+  never part of the request.
+- Every grid point asked for counts as one call against Open-Meteo's free
+  allowance (10,000 a day, 600 a minute). The grid is therefore kept under 580
+  points, two degrees apart for an Atlantic crossing and coarser for a longer
+  route, which comes to about 2,200 calls a day. A failing service is asked
+  again after half an hour, then after longer and longer.
+- The service's "bounding box" mode is not used: it returns every cell of a
+  model in the box (about 22,000 for this area) and counts each as a call.
+- Not available before a voyage is saved or after arrival.
+- Code: `frontend/src/lib/seaField.ts` (blending between grid points, colours,
+  the picture), `frontend/src/components/voyage/seaLayer.ts` (the map layer),
+  `frontend/src/components/voyage/SeaControls.tsx` (switch, slider, scale).
+
 ## Setting up the voyage
 
 In `/voyage/admin`:

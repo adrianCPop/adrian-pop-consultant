@@ -132,7 +132,7 @@ const SeaControls = ({ on, onToggle, state, times, step, onStep, now, className 
                 <span
                   key={metres}
                   className={cn(
-                    "absolute",
+                    "absolute whitespace-nowrap",
                     metres === 0 ? "" : metres === TOP_OF_SCALE ? "-translate-x-full" : "-translate-x-1/2"
                   )}
                   style={{ left: `${(metres / TOP_OF_SCALE) * 100}%` }}

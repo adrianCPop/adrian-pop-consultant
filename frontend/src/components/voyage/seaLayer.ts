@@ -89,7 +89,7 @@ export const createSeaLayer = (
     const stride = arrowStride(shown.forecast.step, map.getZoom());
     for (const arrow of seaArrows(shown.forecast, shown.step, stride)) {
       // Longer arrows for higher waves, within reason.
-      const size = Math.round(13 + Math.min(9, arrow.heightM * 2.2));
+      const size = Math.round(11 + Math.min(9, arrow.heightM * 2.2));
       L.marker(arrow.pos, {
         pane: "voyage-sea-arrows",
         interactive: false,
