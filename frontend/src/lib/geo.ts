@@ -28,6 +28,25 @@ export const bearingDeg = (a: LatLon, b: LatLon): number => {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 };
 
+/** Where you are after `nm` nautical miles, setting off from `from` on `bearing` (degrees true). */
+export const destinationPoint = (from: LatLon, bearing: number, nm: number): LatLon => {
+  const angular = nm / EARTH_RADIUS_NM;
+  const course = toRad(bearing);
+  const lat1 = toRad(from[0]);
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(angular) + Math.cos(lat1) * Math.sin(angular) * Math.cos(course)
+  );
+  const lon2 =
+    toRad(from[1]) +
+    Math.atan2(
+      Math.sin(course) * Math.sin(angular) * Math.cos(lat1),
+      Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2)
+    );
+
+  // Longitude back into -180..180, for a leg that crosses the date line.
+  return [toDeg(lat2), ((((toDeg(lon2) + 180) % 360) + 360) % 360) - 180];
+};
+
 export const pathLengthNm = (points: LatLon[]): number =>
   points.reduce(
     (total, point, index) => (index === 0 ? 0 : total + distanceNm(points[index - 1], point)),

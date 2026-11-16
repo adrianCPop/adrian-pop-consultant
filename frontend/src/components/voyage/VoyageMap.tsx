@@ -34,6 +34,11 @@ interface VoyageMapProps {
   /** Latest position. Leave out before the first one arrives. */
   current?: LatLon | null;
   headingDeg?: number | null;
+  /**
+   * Where the boat would be after some hours on its present course and speed,
+   * nearest first. Drawn as a line ahead of the boat. Empty or left out: no line.
+   */
+  ahead?: { pos: LatLon; hours: number }[];
   from: Port;
   to: Port;
   pins: VoyageMapPin[];
@@ -59,6 +64,8 @@ const TILE_URL =
 const TILE_ATTRIBUTION = "Tiles &copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors";
 
 const TRACK_COLOR = "hsl(184, 100%, 43%)";
+/** The course ahead: a guess, so a colour of its own, apart from what was sailed and what was planned. */
+const AHEAD_COLOR = "hsl(38, 95%, 62%)";
 const GRID_STEP = 5;
 
 const VoyageMap = ({
@@ -66,6 +73,7 @@ const VoyageMap = ({
   track,
   current,
   headingDeg,
+  ahead = [],
   from,
   to,
   pins,
@@ -90,10 +98,13 @@ const VoyageMap = ({
   const handledFitRef = useRef(fitNonce);
 
   const fitRoute = (animate: boolean) => {
-    mapRef.current?.fitBounds(L.latLngBounds([...planned, ...track]), {
-      padding: [44, 44],
-      animate,
-    });
+    mapRef.current?.fitBounds(
+      L.latLngBounds([...planned, ...track, ...ahead.map((point) => point.pos)]),
+      {
+        padding: [44, 44],
+        animate,
+      }
+    );
   };
 
   useEffect(() => {
@@ -193,6 +204,39 @@ const VoyageMap = ({
       lineJoin: "round",
       interactive: false,
     }).addTo(map);
+
+    if (current && ahead.length > 0) {
+      L.polyline([current, ...ahead.map((point) => point.pos)], {
+        color: AHEAD_COLOR,
+        weight: 2,
+        opacity: 0.9,
+        interactive: false,
+      }).addTo(map);
+      ahead.forEach((point, index) => {
+        const dot = L.circleMarker(point.pos, {
+          radius: 3,
+          color: AHEAD_COLOR,
+          weight: 1.5,
+          fillColor: "hsl(228, 39%, 8%)",
+          fillOpacity: 1,
+          interactive: false,
+        });
+        // Only the far end is labelled: with the whole ocean in view the dots are a
+        // few pixels apart and their labels would lie on top of each other.
+        if (index === ahead.length - 1) {
+          // Leaflet treats a string as HTML, so hand it an element with plain text.
+          const label = document.createElement("span");
+          label.textContent = `+${point.hours} h`;
+          dot.bindTooltip(label, {
+            permanent: true,
+            direction: "bottom",
+            offset: [0, 4],
+            className: "voyage-ahead-label",
+          });
+        }
+        dot.addTo(map);
+      });
+    }
 
     // The eastern port sits near the right edge, under the legend. Its name goes to
     // the left of the dot, so a long one is neither covered nor cut off by the edge.
