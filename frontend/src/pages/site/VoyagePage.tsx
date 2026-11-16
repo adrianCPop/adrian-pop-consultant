@@ -29,7 +29,7 @@ import {
   type VoyagePhotoRef,
   type VoyagePort,
 } from "@/lib/voyageApi";
-import { compareWithPlan, projectCourse } from "@/lib/voyageCourse";
+import { MIN_SPEED_KN, compareWithPlan, projectCourse, steadyCourse } from "@/lib/voyageCourse";
 import { computeStats, toFixes } from "@/lib/voyageStats";
 import { cn } from "@/lib/utils";
 
@@ -283,21 +283,32 @@ const VoyagePage = () => {
 
   // The boat's course set against the planned route, while it is under way.
   const underWay = status === "under_way";
+  // Judged by the server's clock as of this fetch rather than by a clock that
+  // ticks, so that at the twelve-hour mark the answer changes once, not back and forth.
+  const positionIsRecent =
+    stats !== null &&
+    data !== null &&
+    Date.parse(data.server_time) - stats.positionTime < AHEAD_MAX_AGE_MS;
+  // The one course that both the line on the map and the figures under it go by.
+  const course =
+    stats && positionIsRecent ? steadyCourse(stats.courseDeg, stats.speedKn) : null;
   const plan = useMemo(
     () =>
       underWay && stats && voyage
-        ? compareWithPlan(stats.position, stats.courseDeg, voyage.planned_route)
+        ? compareWithPlan(stats.position, course, voyage.planned_route)
         : null,
-    [underWay, stats, voyage]
+    [underWay, stats, voyage, course]
   );
-  const positionIsRecent = stats !== null && serverNow - stats.positionTime < AHEAD_MAX_AGE_MS;
   const ahead = useMemo(
     () =>
-      underWay && stats && positionIsRecent
-        ? projectCourse(stats.position, stats.courseDeg, stats.speedKn, AHEAD_HOURS)
-        : [],
-    [underWay, stats, positionIsRecent]
+      underWay && stats ? projectCourse(stats.position, course, stats.speedKn, AHEAD_HOURS) : [],
+    [underWay, stats, course]
   );
+  const whyNoCourse = !positionIsRecent
+    ? "Last position is old"
+    : stats?.speedKn != null && stats.speedKn < MIN_SPEED_KN
+      ? "Hardly moving"
+      : "Not known yet";
 
   const entriesNewestFirst = useMemo(() => [...entries].reverse(), [entries]);
   const selectedEntry = entries.find((entry) => entry.id === selectedId) ?? null;
@@ -681,9 +692,9 @@ const VoyagePage = () => {
                       Course now
                     </dt>
                     <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
-                      {stats.courseDeg === null
-                        ? "Not known yet"
-                        : `${Math.round(stats.courseDeg)}° ${compassPoint(stats.courseDeg)}`}
+                      {course === null
+                        ? whyNoCourse
+                        : `${Math.round(course)}° ${compassPoint(course)}`}
                     </dd>
                   </div>
                   <div>
@@ -700,7 +711,7 @@ const VoyagePage = () => {
                     </dt>
                     <dd className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
                       {plan.turnDeg === null
-                        ? "No course yet"
+                        ? "No course to compare"
                         : Math.abs(plan.turnDeg) < ON_COURSE_DEG
                           ? "On the planned course"
                           : `${Math.abs(plan.turnDeg)}° to the ${plan.turnDeg < 0 ? "left" : "right"}`}
