@@ -210,6 +210,20 @@ const VoyageMap = ({
         .addTo(map);
     });
 
+    // Leaflet lets a marker be reached with Tab but does nothing on Enter, so a
+    // marker that opens an entry gets that itself. Its element only exists once the
+    // map has a view, which is set further down: hence "add". Call before addTo().
+    const openWithKeyboard = (marker: L.Marker, id: string) => {
+      marker.on("add", () => {
+        marker.getElement()?.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelectRef.current(id);
+          }
+        });
+      });
+    };
+
     const pinMarkers: Record<string, L.Marker> = {};
     pins.forEach((pin) => {
       const marker = L.marker(pin.pos, {
@@ -223,6 +237,7 @@ const VoyageMap = ({
         }),
       });
       marker.on("click", () => onSelectRef.current(pin.id));
+      openWithKeyboard(marker, pin.id);
       marker.addTo(map);
       pinMarkers[pin.id] = marker;
     });
@@ -248,6 +263,7 @@ const VoyageMap = ({
       });
       if (boatEntryId) {
         boat.on("click", () => onSelectRef.current(boatEntryId));
+        openWithKeyboard(boat, boatEntryId);
       }
       boat.addTo(map);
       boatMarkerRef.current = boat;

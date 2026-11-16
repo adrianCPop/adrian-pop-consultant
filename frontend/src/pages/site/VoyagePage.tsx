@@ -118,6 +118,12 @@ const VoyagePage = () => {
   const [lightbox, setLightbox] = useState<{ photo: VoyagePhotoRef; entry: VoyageEntry } | null>(
     null
   );
+  /** The entry opened over the page from the map, and which of its photos is shown large. */
+  const [opened, setOpened] = useState<{ id: string; photo: number } | null>(null);
+  /** Set when the overlay is closed in order to go to the entry in the logbook. */
+  const goToAfterCloseRef = useRef<string | null>(null);
+  /** What had the keyboard focus when the overlay opened (the pin, usually), to hand it back. */
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const mapSectionRef = useRef<HTMLElement>(null);
   const mapViewRef = useRef<MapView | null>(null);
 
@@ -197,6 +203,11 @@ const VoyagePage = () => {
 
   const entriesNewestFirst = useMemo(() => [...entries].reverse(), [entries]);
   const selectedEntry = entries.find((entry) => entry.id === selectedId) ?? null;
+  // Looked up on every render, so the overlay closes by itself if the entry is deleted.
+  const openedEntry = opened ? entries.find((entry) => entry.id === opened.id) ?? null : null;
+  const openedPhoto = openedEntry
+    ? openedEntry.photos[Math.min(opened?.photo ?? 0, openedEntry.photos.length - 1)] ?? null
+    : null;
 
   const dayLabel = (entry: VoyageEntry) => {
     const time = Date.parse(entry.time);
@@ -217,6 +228,19 @@ const VoyagePage = () => {
 
   const readEntry = (id: string) => {
     document.getElementById(`entry-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  /** A pin or the boat was clicked on the map: mark it and open the entry over the page. */
+  const openEntry = (id: string) => {
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedId(id);
+    setOpened({ id, photo: 0 });
+  };
+
+  const closeAndReadInLogbook = (id: string) => {
+    goToAfterCloseRef.current = id;
+    setOpened(null);
   };
 
   const showWholeRoute = () => {
@@ -369,7 +393,7 @@ const VoyagePage = () => {
           focus={focus}
           fitNonce={fitNonce}
           viewRef={mapViewRef}
-          onSelect={setSelectedId}
+          onSelect={openEntry}
         />
 
         {stats ? (
@@ -423,14 +447,24 @@ const VoyagePage = () => {
               <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                 {selectedEntry.body}
               </p>
-              <button
-                type="button"
-                onClick={() => readEntry(selectedEntry.id)}
-                className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-              >
-                Read entry
-                <ArrowDown className="h-3 w-3" />
-              </button>
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                <button
+                  type="button"
+                  onClick={() => openEntry(selectedEntry.id)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  Open
+                </button>
+                <button
+                  type="button"
+                  onClick={() => readEntry(selectedEntry.id)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                >
+                  In the logbook
+                  <ArrowDown className="h-3 w-3" />
+                </button>
+              </div>
             </div>
             <button
               type="button"
@@ -772,6 +806,126 @@ const VoyagePage = () => {
           ) : null}
         </aside>
       </section>
+
+      <Dialog open={openedEntry !== null} onOpenChange={(open) => !open && setOpened(null)}>
+        <DialogContent
+          className="flex max-h-[88vh] max-w-2xl flex-col gap-0 overflow-hidden border-border/80 bg-card p-0 focus:outline-none [&>button]:rounded-full [&>button]:bg-background/80 [&>button]:p-1.5 [&>button]:opacity-100 [&>button]:backdrop-blur-sm"
+          onOpenAutoFocus={(event) => {
+            // Focus the overlay itself rather than its first button (a photo thumbnail).
+            event.preventDefault();
+            (event.currentTarget as HTMLElement).focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            // The overlay has no trigger button of its own, so focus is handed back here.
+            event.preventDefault();
+            const id = goToAfterCloseRef.current;
+            const back = returnFocusRef.current;
+            goToAfterCloseRef.current = null;
+            returnFocusRef.current = null;
+            if (id) {
+              // Going on to the logbook: leave focus (and the scroll position) off the map.
+              window.setTimeout(() => readEntry(id), 0);
+            } else if (back?.isConnected) {
+              // The pin, unless the map was redrawn meanwhile and it is gone.
+              back.focus({ preventScroll: true });
+            }
+          }}
+        >
+          {openedEntry ? (
+            <>
+              {/* Photo and text scroll together, so a long entry is not read through a slit under a fixed photo. */}
+              <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]">
+                {openedPhoto ? (
+                  <div className="bg-black">
+                    <img
+                      key={openedPhoto.id}
+                      src={photoUrl(openedPhoto.id)}
+                      alt=""
+                      width={openedPhoto.w}
+                      height={openedPhoto.h}
+                      className="max-h-[44vh] w-full object-contain"
+                    />
+                    {openedEntry.photos.length > 1 ? (
+                      <div className="flex gap-2 overflow-x-auto px-3 py-2.5 [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]">
+                        {openedEntry.photos.map((photo, index) => (
+                          <button
+                            key={photo.id}
+                            type="button"
+                            onClick={() => setOpened({ id: openedEntry.id, photo: index })}
+                            aria-label={`Show photo ${index + 1} of ${openedEntry.photos.length}`}
+                            aria-pressed={photo.id === openedPhoto.id}
+                            className={cn(
+                              "h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              photo.id === openedPhoto.id
+                                ? "border-primary"
+                                : "border-transparent opacity-60 hover:opacity-100"
+                            )}
+                          >
+                            <img
+                              src={photoUrl(photo.id, "thumb")}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="px-5 py-5 sm:px-6">
+                  <div
+                    className={cn(
+                      "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground",
+                      // Without a photo the close button sits beside this line.
+                      !openedPhoto && "pr-10"
+                    )}
+                  >
+                    <span className="rounded-full bg-primary/15 px-2.5 py-1 font-semibold uppercase tracking-[0.1em] text-primary">
+                      {dayLabel(openedEntry)}
+                    </span>
+                    <span className="tabular-nums">
+                      {dayMonth(openedEntry.time)}, {clock(openedEntry.time)}
+                    </span>
+                    {openedEntry.pos ? (
+                      <span className="tabular-nums">{formatCoord(openedEntry.pos)}</span>
+                    ) : null}
+                  </div>
+                  <DialogTitle className="mt-3 font-heading text-xl font-semibold leading-snug text-foreground">
+                    {openedEntry.title || "Log entry"}
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Log entry of {dayMonth(openedEntry.time)}, {clock(openedEntry.time)}
+                  </DialogDescription>
+                  {openedEntry.body ? (
+                    <p className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">
+                      {openedEntry.body}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground sm:px-6">
+                {openedEntry.author ? <span>Written by {openedEntry.author}</span> : null}
+                {openedEntry.photos.length > 0 ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Camera className="h-3.5 w-3.5 text-primary" />
+                    {openedEntry.photos.length} {openedEntry.photos.length === 1 ? "photo" : "photos"}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => closeAndReadInLogbook(openedEntry.id)}
+                  className="ml-auto inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
+                >
+                  In the logbook
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={lightbox !== null} onOpenChange={(open) => !open && setLightbox(null)}>
         <DialogContent className="max-w-4xl gap-0 overflow-hidden border-border/80 bg-card p-0">
