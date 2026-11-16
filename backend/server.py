@@ -14,6 +14,7 @@ from typing import Optional
 from routes.articles import router as articles_router
 from routes.contact import router as contact_router
 from routes.voyage import router as voyage_router
+from services.mongo import open_client
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -45,15 +46,6 @@ MONGO_URL = os.getenv(
 
 MONGO_DB_NAME = os.getenv("MONGO_DB", "adrian_pop_portfolio")
 
-
-def address_for_log(url: str) -> str:
-    """Host and database only, so the user name and password never reach the log.
-
-    Everything up to the last "@" is dropped rather than parsed: a password that
-    was not URL-encoded can contain "/" or "@" and would fool a URL parser.
-    """
-    return url.rsplit("@", 1)[-1].split("://", 1)[-1].split("?", 1)[0]
-
 # -----------------------------------------------------------------------------
 # Globals (initialized on startup)
 # -----------------------------------------------------------------------------
@@ -77,10 +69,11 @@ class StatusCheckCreate(BaseModel):
 async def on_startup():
     global mongo_client, db
     logger.info("Starting up the application...")
-    logger.info(f"MongoDB: {address_for_log(MONGO_URL)}")
+    # The address is never logged, not even in part: it carries the database
+    # user name and password, and no way of trimming it is safe for every form.
     logger.info(f"Database: {MONGO_DB_NAME}")
 
-    mongo_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000)
+    mongo_client = open_client(MONGO_URL, serverSelectionTimeoutMS=2000)
     db = mongo_client[MONGO_DB_NAME]
     logger.info("Application startup complete.")
 
@@ -114,13 +107,14 @@ async def ready():
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
     except Exception as e:
-        logger.error(f"Readiness check failed: {e}")
+        # Only the kind of error: the full text names the database hosts.
+        logger.error(f"Readiness check failed: {type(e).__name__}")
         return JSONResponse(
             status_code=503,
             content={
                 "status": "not-ready",
                 "database": "disconnected",
-                "error": str(e),
+                "error": type(e).__name__,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
             },
         )

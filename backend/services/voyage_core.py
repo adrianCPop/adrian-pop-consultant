@@ -21,6 +21,8 @@ import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 from PIL import Image, ImageOps
 
+from services.mongo import open_client
+
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- database
@@ -32,7 +34,7 @@ def connect_db():
     """Same database as the rest of the API, from the same environment variables."""
     global _client
     if _client is None:
-        _client = AsyncIOMotorClient(
+        _client = open_client(
             os.getenv("MONGO_URL", "mongodb://mongodb:27017/adrian_pop_portfolio"),
             serverSelectionTimeoutMS=3000,
         )
