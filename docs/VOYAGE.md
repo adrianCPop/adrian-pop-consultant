@@ -34,6 +34,14 @@ The back end has to be redeployed, not only the front end:
    ```
 
 4. **Check.** `https://<site>/api/voyage` should answer with `"status": "not_configured"`.
+   This request reads the database, which `/health` does not. If it answers 500, the
+   API cannot use its database: `MONGO_URL` has to carry a user that may read and
+   write it.
+
+Order, when both images change: rebuild the back end image before the new code
+reaches any folder a running back end reads (the code needs `Pillow`), and restart
+the front end after the back end, because its nginx looks up `portfolio-backend`
+once, when it starts.
 
 Things the deployment must keep true:
 
