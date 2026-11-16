@@ -124,6 +124,12 @@ const VoyagePage = () => {
   const goToAfterCloseRef = useRef<string | null>(null);
   /** What had the keyboard focus when the overlay opened (the pin, usually), to hand it back. */
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  /** The entry last opened, to find its pin again if the map was redrawn meanwhile. */
+  const lastOpenedIdRef = useRef<string | null>(null);
+  const openedAtRef = useRef(0);
+  /** What the overlay displays; see where it is filled in. */
+  const shownRef = useRef<{ entry: VoyageEntry; photo: VoyagePhotoRef | null } | null>(null);
+  const overlayScrollerRef = useRef<HTMLDivElement>(null);
   const mapSectionRef = useRef<HTMLElement>(null);
   const mapViewRef = useRef<MapView | null>(null);
 
@@ -208,6 +214,20 @@ const VoyagePage = () => {
   const openedPhoto = openedEntry
     ? openedEntry.photos[Math.min(opened?.photo ?? 0, openedEntry.photos.length - 1)] ?? null
     : null;
+  // Kept after the overlay is told to close, so it fades out with its content
+  // rather than as an empty frame.
+  if (openedEntry) {
+    shownRef.current = { entry: openedEntry, photo: openedPhoto };
+  }
+  const shown = shownRef.current;
+
+  useEffect(() => {
+    // The entry was deleted while it was open. Forget it, so that it does not open
+    // again by itself if an entry with the same id is ever sent again.
+    if (opened && !openedEntry) {
+      setOpened(null);
+    }
+  }, [opened, openedEntry]);
 
   const dayLabel = (entry: VoyageEntry) => {
     const time = Date.parse(entry.time);
@@ -227,15 +247,34 @@ const VoyagePage = () => {
   };
 
   const readEntry = (id: string) => {
-    document.getElementById(`entry-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const article = document.getElementById(`entry-${id}`);
+    // Focus goes along, so a keyboard or screen-reader user carries on from the entry.
+    article?.focus({ preventScroll: true });
+    article?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   /** A pin or the boat was clicked on the map: mark it and open the entry over the page. */
   const openEntry = (id: string) => {
     returnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    lastOpenedIdRef.current = id;
+    openedAtRef.current = Date.now();
     setSelectedId(id);
     setOpened({ id, photo: 0 });
+  };
+
+  /** Where focus goes when the overlay closes: back to what opened it, if that is still there. */
+  const focusAfterOverlay = () => {
+    const back = returnFocusRef.current;
+    const id = lastOpenedIdRef.current;
+    returnFocusRef.current = null;
+    const map = mapSectionRef.current;
+    const target =
+      (back?.isConnected ? back : null) ??
+      // The map was redrawn while the overlay was open: the same entry's new pin.
+      (id ? map?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`) : null) ??
+      map?.querySelector<HTMLElement>(".voyage-map");
+    target?.focus({ preventScroll: true });
   };
 
   const closeAndReadInLogbook = (id: string) => {
@@ -700,8 +739,9 @@ const VoyagePage = () => {
                 <li key={entry.id}>
                   <article
                     id={`entry-${entry.id}`}
+                    tabIndex={-1}
                     className={cn(
-                      "panel-soft scroll-mt-28 rounded-2xl p-5 transition-shadow sm:p-6",
+                      "panel-soft scroll-mt-28 rounded-2xl p-5 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-6",
                       selectedId === entry.id && "ring-1 ring-primary/70"
                     )}
                   >
@@ -811,52 +851,62 @@ const VoyagePage = () => {
         <DialogContent
           className="flex max-h-[88vh] max-w-2xl flex-col gap-0 overflow-hidden border-border/80 bg-card p-0 focus:outline-none [&>button]:rounded-full [&>button]:bg-background/80 [&>button]:p-1.5 [&>button]:opacity-100 [&>button]:backdrop-blur-sm"
           onOpenAutoFocus={(event) => {
-            // Focus the overlay itself rather than its first button (a photo thumbnail).
+            // Focus the scrolling part rather than the first button (a photo thumbnail),
+            // so the arrow keys, Space and Page Down scroll a long entry straight away.
             event.preventDefault();
-            (event.currentTarget as HTMLElement).focus();
+            (overlayScrollerRef.current ?? (event.currentTarget as HTMLElement)).focus();
+          }}
+          onPointerDownOutside={(event) => {
+            // The second press of a double-click on a pin lands outside the overlay
+            // it has just opened. It must not close it again.
+            if (Date.now() - openedAtRef.current < 400) {
+              event.preventDefault();
+            }
           }}
           onCloseAutoFocus={(event) => {
-            // The overlay has no trigger button of its own, so focus is handed back here.
+            // The overlay has no trigger button of its own, so focus is handed on here.
             event.preventDefault();
             const id = goToAfterCloseRef.current;
-            const back = returnFocusRef.current;
             goToAfterCloseRef.current = null;
-            returnFocusRef.current = null;
             if (id) {
-              // Going on to the logbook: leave focus (and the scroll position) off the map.
+              // Going on to the logbook: focus goes to the entry there, not back to the map.
+              returnFocusRef.current = null;
               window.setTimeout(() => readEntry(id), 0);
-            } else if (back?.isConnected) {
-              // The pin, unless the map was redrawn meanwhile and it is gone.
-              back.focus({ preventScroll: true });
+            } else {
+              focusAfterOverlay();
             }
           }}
         >
-          {openedEntry ? (
+          {shown ? (
             <>
               {/* Photo and text scroll together, so a long entry is not read through a slit under a fixed photo. */}
-              <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]">
-                {openedPhoto ? (
+              <div
+                ref={overlayScrollerRef}
+                tabIndex={0}
+                className="min-h-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]"
+              >
+                {shown.photo ? (
                   <div className="bg-black">
                     <img
-                      key={openedPhoto.id}
-                      src={photoUrl(openedPhoto.id)}
+                      key={shown.photo.id}
+                      src={photoUrl(shown.photo.id)}
                       alt=""
-                      width={openedPhoto.w}
-                      height={openedPhoto.h}
+                      width={shown.photo.w}
+                      height={shown.photo.h}
                       className="max-h-[44vh] w-full object-contain"
                     />
-                    {openedEntry.photos.length > 1 ? (
+                    {shown.entry.photos.length > 1 ? (
                       <div className="flex gap-2 overflow-x-auto px-3 py-2.5 [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]">
-                        {openedEntry.photos.map((photo, index) => (
+                        {shown.entry.photos.map((photo, index) => (
                           <button
                             key={photo.id}
                             type="button"
-                            onClick={() => setOpened({ id: openedEntry.id, photo: index })}
-                            aria-label={`Show photo ${index + 1} of ${openedEntry.photos.length}`}
-                            aria-pressed={photo.id === openedPhoto.id}
+                            onClick={() => openedEntry && setOpened({ id: openedEntry.id, photo: index })}
+                            aria-label={`Show photo ${index + 1} of ${shown.entry.photos.length}`}
+                            aria-pressed={photo.id === shown.photo.id}
                             className={cn(
                               "h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              photo.id === openedPhoto.id
+                              photo.id === shown.photo.id
                                 ? "border-primary"
                                 : "border-transparent opacity-60 hover:opacity-100"
                             )}
@@ -878,44 +928,44 @@ const VoyagePage = () => {
                     className={cn(
                       "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground",
                       // Without a photo the close button sits beside this line.
-                      !openedPhoto && "pr-10"
+                      !shown.photo && "pr-10"
                     )}
                   >
                     <span className="rounded-full bg-primary/15 px-2.5 py-1 font-semibold uppercase tracking-[0.1em] text-primary">
-                      {dayLabel(openedEntry)}
+                      {dayLabel(shown.entry)}
                     </span>
                     <span className="tabular-nums">
-                      {dayMonth(openedEntry.time)}, {clock(openedEntry.time)}
+                      {dayMonth(shown.entry.time)}, {clock(shown.entry.time)}
                     </span>
-                    {openedEntry.pos ? (
-                      <span className="tabular-nums">{formatCoord(openedEntry.pos)}</span>
+                    {shown.entry.pos ? (
+                      <span className="tabular-nums">{formatCoord(shown.entry.pos)}</span>
                     ) : null}
                   </div>
-                  <DialogTitle className="mt-3 font-heading text-xl font-semibold leading-snug text-foreground">
-                    {openedEntry.title || "Log entry"}
+                  <DialogTitle className="mt-3 break-words font-heading text-xl font-semibold leading-snug text-foreground">
+                    {shown.entry.title || "Log entry"}
                   </DialogTitle>
                   <DialogDescription className="sr-only">
-                    Log entry of {dayMonth(openedEntry.time)}, {clock(openedEntry.time)}
+                    Log entry of {dayMonth(shown.entry.time)}, {clock(shown.entry.time)}
                   </DialogDescription>
-                  {openedEntry.body ? (
+                  {shown.entry.body ? (
                     <p className="mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">
-                      {openedEntry.body}
+                      {shown.entry.body}
                     </p>
                   ) : null}
                 </div>
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3 text-xs text-muted-foreground sm:px-6">
-                {openedEntry.author ? <span>Written by {openedEntry.author}</span> : null}
-                {openedEntry.photos.length > 0 ? (
+                {shown.entry.author ? <span>Written by {shown.entry.author}</span> : null}
+                {shown.entry.photos.length > 0 ? (
                   <span className="inline-flex items-center gap-1.5">
                     <Camera className="h-3.5 w-3.5 text-primary" />
-                    {openedEntry.photos.length} {openedEntry.photos.length === 1 ? "photo" : "photos"}
+                    {shown.entry.photos.length} {shown.entry.photos.length === 1 ? "photo" : "photos"}
                   </span>
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => closeAndReadInLogbook(openedEntry.id)}
+                  onClick={() => closeAndReadInLogbook(shown.entry.id)}
                   className="ml-auto inline-flex items-center gap-1.5 font-semibold text-primary hover:underline"
                 >
                   In the logbook

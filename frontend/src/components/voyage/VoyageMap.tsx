@@ -220,7 +220,13 @@ const VoyageMap = ({
     // map has a view, which is set further down: hence "add". Call before addTo().
     const openWithKeyboard = (marker: L.Marker, id: string) => {
       marker.on("add", () => {
-        marker.getElement()?.addEventListener("keydown", (event) => {
+        const element = marker.getElement();
+        if (!element) {
+          return;
+        }
+        // Lets the page find this entry's marker again after the map has been redrawn.
+        element.dataset.entryId = id;
+        element.addEventListener("keydown", (event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onSelectRef.current(id);

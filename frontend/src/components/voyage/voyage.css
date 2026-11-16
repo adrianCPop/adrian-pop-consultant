@@ -116,6 +116,11 @@
   box-shadow: 0 0 0 3px hsl(228 39% 8%), 0 0 0 9px hsl(184 100% 43% / 0.3);
 }
 
+/* Reached with the keyboard: a light ring, since the outline is switched off above. */
+.voyage-boat:focus-visible .voyage-boat__body {
+  box-shadow: 0 0 0 3px hsl(228 39% 8%), 0 0 0 6px hsl(220 31% 94%);
+}
+
 .voyage-boat__body svg {
   width: 16px;
   height: 16px;
