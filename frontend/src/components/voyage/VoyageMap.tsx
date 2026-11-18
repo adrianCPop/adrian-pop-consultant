@@ -347,15 +347,21 @@ const VoyageMap = ({
     });
     pinMarkersRef.current = pinMarkers;
 
-    const ketchIcon = apolodor ? L.icon({
-      iconUrl: "/apolodor-ketch.svg",
-      className: "apolodor-boat",
-      iconSize: [72, 44],
-      iconAnchor: [36, 41],
-    }) : null;
+    // The ketch, with the boat's name under it: the lettering on the drawn hull is
+    // too small to read at this size.
+    const ketchIcon = (extra = "") =>
+      L.divIcon({
+        className: "apolodor-boat",
+        html:
+          `<img src="/apolodor-ketch.svg" width="72" height="44" alt="">` +
+          `<span class="apolodor-boat__name" aria-hidden="true">Soulmate</span>` +
+          extra,
+        iconSize: [72, 44],
+        iconAnchor: [36, 41],
+      });
 
-    if (ketchIcon && beforeDeparture && !current) {
-      L.marker(from.pos, { icon: ketchIcon, interactive: false, keyboard: false, alt: "" }).addTo(map);
+    if (apolodor && beforeDeparture && !current) {
+      L.marker(from.pos, { icon: ketchIcon(), interactive: false, keyboard: false, alt: "" }).addTo(map);
     }
 
     if (current) {
@@ -370,13 +376,9 @@ const VoyageMap = ({
         title: words.latestPosition,
         alt: words.latestPosition,
         zIndexOffset: 1000,
-        icon: ketchIcon ? L.divIcon({
-          className: "apolodor-boat",
-          html: `<img src="/apolodor-ketch.svg" width="72" height="44" alt="">` +
-            (headingDeg == null ? "" : `<span class="apolodor-bearing" aria-hidden="true">${glyph}</span>`),
-          iconSize: [72, 44],
-          iconAnchor: [36, 41],
-        }) : L.divIcon({
+        icon: apolodor ? ketchIcon(
+          headingDeg == null ? "" : `<span class="apolodor-bearing" aria-hidden="true">${glyph}</span>`
+        ) : L.divIcon({
           className: "voyage-boat",
           html: `<span class="voyage-boat__pulse"></span><span class="voyage-boat__body">${glyph}</span>`,
           iconSize: [38, 38],
