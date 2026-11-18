@@ -534,7 +534,7 @@ const RO: Record<MessageKey, Message> = {
   "public.sea.strongest": "Cel mai puternic vânt din zonă: {figure}",
   "public.noPosition":
     "Încă nu a sosit nicio poziție. Traseul și cifrele apar odată cu prima.",
-  "public.plan.title": "Planul",
+  "public.plan.title": "Pregătiți de aventură",
   "public.plan.caption":
     "Distanța parcursă, viteza și distanțele pe zile apar aici după ce barca pleacă.",
   "public.plan.route": "Ruta planificată",

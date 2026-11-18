@@ -1,3 +1,4 @@
+import VoyageTitle from "@/components/voyage/VoyageTitle";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDown,
@@ -270,6 +271,17 @@ const VoyagePage = () => {
       setFailed(true);
     }
   }, []);
+
+  // In Romanian the whole page wears the Apolodor colours: the ground around the
+  // tracker, the footer and the entry overlay, which is drawn outside this component.
+  const apolodor = texts.language === "RO";
+  useEffect(() => {
+    if (!apolodor) {
+      return;
+    }
+    document.body.classList.add("apolodor-page");
+    return () => document.body.classList.remove("apolodor-page");
+  }, [apolodor]);
 
   useEffect(() => {
     void load();
@@ -769,6 +781,7 @@ const VoyagePage = () => {
   const plannedNm = rhumbPathLengthNm(voyage.planned_route);
   // The map is rebuilt when what it draws changes.
   const mapKey = [
+    status,
     data.track.length,
     data.track[data.track.length - 1]?.[2] ?? 0,
     entries.length,
@@ -844,6 +857,7 @@ const VoyagePage = () => {
       lang={texts.htmlLang}
       className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8"
     >
+      <div className={apolodor ? "apolodor-tracker" : undefined}>
       <header>
         <div className="flex items-start justify-between gap-4">
           <p className="pt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
@@ -851,11 +865,7 @@ const VoyagePage = () => {
           </p>
           <VoyageLanguageSwitch />
         </div>
-        <h1 className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-heading text-3xl font-semibold leading-tight sm:text-4xl">
-          {originName}
-          <ArrowRight className="h-6 w-6 text-primary sm:h-7 sm:w-7" aria-label={t("public.to")} />
-          {destinationName}
-        </h1>
+        <VoyageTitle language={texts.language} origin={originName} destination={destinationName} to={t("public.to")} />
         <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
           {status === "under_way" ? (
             <span className="relative flex h-2.5 w-2.5">
@@ -881,6 +891,8 @@ const VoyagePage = () => {
       >
         <VoyageMap
           key={mapKey}
+          apolodor={apolodor}
+          beforeDeparture={status === "planned"}
           planned={voyage.planned_route}
           track={trackLine}
           current={stats?.position ?? null}
@@ -1426,6 +1438,8 @@ const VoyagePage = () => {
           ) : null}
         </aside>
       </section>
+
+      </div>
 
       <Dialog open={openedEntry !== null} onOpenChange={(open) => !open && setOpened(null)}>
         <DialogContent

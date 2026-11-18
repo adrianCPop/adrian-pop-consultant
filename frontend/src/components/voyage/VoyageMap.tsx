@@ -62,6 +62,8 @@ interface VoyageMapProps {
   /** The figures for a spot that was clicked, in words. */
   describeSea?: (sample: SeaSample, forecast: SeaForecast) => string;
   /** The map's own words, in the page's language. English when left out. */
+  apolodor?: boolean;
+  beforeDeparture?: boolean;
   text?: Partial<MapText>;
   className?: string;
 }
@@ -111,6 +113,8 @@ const VoyageMap = ({
   onSelect,
   sea = null,
   describeSea,
+  apolodor = false,
+  beforeDeparture = false,
   text,
   className,
 }: VoyageMapProps) => {
@@ -163,7 +167,7 @@ const VoyageMap = ({
     L.control
       .zoom({ position: "bottomright", zoomInTitle: words.zoomIn, zoomOutTitle: words.zoomOut })
       .addTo(map);
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 16 }).addTo(map);
+    L.tileLayer(apolodor ? TILE_URL.replace("Dark_Gray", "Light_Gray") : TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 16 }).addTo(map);
 
     // Latitude / longitude grid, for the chart feel on an otherwise empty ocean.
     for (let lat = -20; lat <= 60; lat += GRID_STEP) {
@@ -172,7 +176,7 @@ const VoyageMap = ({
           [lat, -110],
           [lat, 30],
         ],
-        { color: "#ffffff", weight: 1, opacity: lat % 10 === 0 ? 0.1 : 0.05, interactive: false }
+        { color: apolodor ? "#275664" : "#ffffff", weight: 1, opacity: lat % 10 === 0 ? 0.1 : 0.05, interactive: false }
       ).addTo(map);
     }
     for (let lon = -110; lon <= 30; lon += GRID_STEP) {
@@ -181,7 +185,7 @@ const VoyageMap = ({
           [-20, lon],
           [60, lon],
         ],
-        { color: "#ffffff", weight: 1, opacity: lon % 10 === 0 ? 0.1 : 0.05, interactive: false }
+        { color: apolodor ? "#275664" : "#ffffff", weight: 1, opacity: lon % 10 === 0 ? 0.1 : 0.05, interactive: false }
       ).addTo(map);
     }
 
@@ -228,17 +232,17 @@ const VoyageMap = ({
     map.on("moveend zoomend", drawGridLabels);
 
     L.polyline(planned, {
-      color: "#a9bbdd",
+      color: apolodor ? "#5a5041" : "#a9bbdd",
       weight: 1.5,
       opacity: 0.6,
       dashArray: "3 8",
       interactive: false,
     }).addTo(map);
-    L.polyline(track, { color: TRACK_COLOR, weight: 10, opacity: 0.16, interactive: false }).addTo(
+    L.polyline(track, { color: apolodor ? "#12646a" : TRACK_COLOR, weight: 10, opacity: 0.16, interactive: false }).addTo(
       map
     );
     L.polyline(track, {
-      color: TRACK_COLOR,
+      color: apolodor ? "#12646a" : TRACK_COLOR,
       weight: 3,
       lineJoin: "round",
       interactive: false,
@@ -343,6 +347,17 @@ const VoyageMap = ({
     });
     pinMarkersRef.current = pinMarkers;
 
+    const ketchIcon = apolodor ? L.icon({
+      iconUrl: "/apolodor-ketch.svg",
+      className: "apolodor-boat",
+      iconSize: [72, 44],
+      iconAnchor: [36, 41],
+    }) : null;
+
+    if (ketchIcon && beforeDeparture && !current) {
+      L.marker(from.pos, { icon: ketchIcon, interactive: false, keyboard: false, alt: "" }).addTo(map);
+    }
+
     if (current) {
       // An arrow when the heading is known, a plain dot when it is not.
       const glyph =
@@ -353,14 +368,22 @@ const VoyageMap = ({
             )}deg)" aria-hidden="true"><path d="M12 2 19 21 12 17 5 21Z"/></svg>`;
       const boat = L.marker(current, {
         title: words.latestPosition,
+        alt: words.latestPosition,
         zIndexOffset: 1000,
-        icon: L.divIcon({
+        icon: ketchIcon ? L.divIcon({
+          className: "apolodor-boat",
+          html: `<img src="/apolodor-ketch.svg" width="72" height="44" alt="">` +
+            (headingDeg == null ? "" : `<span class="apolodor-bearing" aria-hidden="true">${glyph}</span>`),
+          iconSize: [72, 44],
+          iconAnchor: [36, 41],
+        }) : L.divIcon({
           className: "voyage-boat",
           html: `<span class="voyage-boat__pulse"></span><span class="voyage-boat__body">${glyph}</span>`,
           iconSize: [38, 38],
           iconAnchor: [19, 19],
         }),
       });
+      boat.on("add", () => boat.getElement()?.setAttribute("aria-label", words.latestPosition));
       if (boatEntryId) {
         boat.on("click", () => onSelectRef.current(boatEntryId));
         openWithKeyboard(boat, boatEntryId);
