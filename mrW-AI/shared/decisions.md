@@ -7,6 +7,7 @@
 
 - [decision] Active site work is implemented in the routed `frontend/src/pages/site/*` architecture; legacy section components are updated only when they still carry live or compiled behavior
 - [decision] Pre-existing architecture: FastAPI + Motor + MongoDB (backend), React + Vite + Supabase (frontend), Docker Compose infra
+- [decision] VPS deploys for the public portfolio should rebuild `adrian-pop-consultant-frontend` from `/root/APT/adrian-pop-consultant/frontend` and then recreate both `portfolio-frontend` and `/root`'s `portfolio-frontend` service so `adrianpop.tech` picks up the new image
 
 ## Archive
 

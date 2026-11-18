@@ -353,7 +353,7 @@ const VoyageMap = ({
       L.divIcon({
         className: "apolodor-boat",
         html:
-          `<img src="/apolodor-ketch.svg" width="72" height="44" alt="">` +
+          `<img src="/apolodor-ketch-soulmate.svg" width="72" height="44" alt="">` +
           `<span class="apolodor-boat__name" aria-hidden="true">Soulmate</span>` +
           extra,
         iconSize: [72, 44],
