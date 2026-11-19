@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
+import { CREW_LANGUAGES } from "@/lib/voyageI18n";
 import { useCrewOnlyPage } from "@/lib/useCrewOnlyPage";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import {
@@ -299,7 +300,7 @@ const VoyageAdminPage = () => {
           <p className="pt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
             {t("admin.eyebrow")}
           </p>
-          <VoyageLanguageSwitch />
+          <VoyageLanguageSwitch languages={CREW_LANGUAGES} />
         </div>
         <h1 className="mt-2 font-heading text-3xl font-semibold">{t("admin.title")}</h1>
         <form onSubmit={signIn} className="panel-soft mt-6 rounded-2xl p-5">
@@ -355,7 +356,7 @@ const VoyageAdminPage = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <VoyageLanguageSwitch />
+          <VoyageLanguageSwitch languages={CREW_LANGUAGES} />
           <Button variant="outline" size="sm" className="rounded-lg" onClick={() => void refresh()}>
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
             {t("admin.refresh")}

@@ -29,11 +29,14 @@ describe("pickLanguage, which language a visitor gets", () => {
 
   it("takes the first of the browser's languages that the page has", () => {
     expect(pickLanguage(null, ["en-US", "ro"])).toBe("EN");
-    expect(pickLanguage(null, ["de-DE", "ro-RO", "en"])).toBe("RO");
+    expect(pickLanguage(null, ["fr-FR", "ro-RO", "en"])).toBe("RO");
+    expect(pickLanguage(null, ["de-DE", "ro-RO", "en"])).toBe("DE");
+    expect(pickLanguage(null, ["da-DK", "en"])).toBe("DA");
+    expect(pickLanguage("DA", ["en-US"])).toBe("DA");
   });
 
   it("falls back to English", () => {
-    expect(pickLanguage(null, ["fr-FR", "de"])).toBe("EN");
+    expect(pickLanguage(null, ["fr-FR", "es"])).toBe("EN");
     expect(pickLanguage(null, [])).toBe("EN");
     expect(pickLanguage(undefined, ["robot"])).toBe("EN");
   });
@@ -387,11 +390,66 @@ describe("messages that come from the server", () => {
 });
 
 describe("every text can be produced", () => {
-  it.each(["EN", "RO"] as VoyageLanguage[])("in %s, with nothing left unfilled", (language) => {
+  it.each(["EN", "RO", "DE", "DA"] as VoyageLanguage[])("in %s, with nothing left unfilled", (language) => {
     const values = Object.fromEntries(
       keys.flatMap((key) => placeholders(forms(MESSAGES.EN[key])[0])).map((name) => [name, 3])
     );
     const unfilled = keys.filter((key) => /[{}]/.test(translate(language, key, values)));
     expect(unfilled).toEqual([]);
+  });
+});
+
+describe("German and Danish, for the public page", () => {
+  const publicKeys = keys.filter((key) => /^(public|common|span|duration|durationLong|language)\./.test(key));
+
+  it.each(["DE", "DA"] as const)("%s has every message, with the same placeholders", (language) => {
+    expect(Object.keys(MESSAGES[language]).sort()).toEqual([...keys].sort());
+    const different = keys.filter((key) => {
+      const expected = JSON.stringify(placeholders(forms(MESSAGES.EN[key])[0]));
+      return forms(MESSAGES[language][key]).some(
+        (text) => JSON.stringify(placeholders(text)) !== expected
+      );
+    });
+    expect(different).toEqual([]);
+  });
+
+  it.each(["DE", "DA"] as const)("%s leaves no text of the public page in English", (language) => {
+    // Written the same in both languages, or a figure with its unit.
+    const same = new Set<MessageKey>([
+      "common.utcTime",
+      "public.status.leavingAt",
+      "public.weather.wind",
+      "public.weather.windFrom",
+      "public.sea.wind",
+      "span.minutes",
+      "duration.days",
+      "public.sea.ahead",
+    ]);
+    const untranslated = publicKeys.filter(
+      (key) =>
+        !same.has(key) &&
+        JSON.stringify(MESSAGES[language][key]) === JSON.stringify(MESSAGES.EN[key])
+    );
+    expect(untranslated).toEqual([]);
+  });
+
+  it("write the compass and the figures their own way", () => {
+    const german = makeTexts("DE");
+    const danish = makeTexts("DA");
+    expect(german.point("ENE")).toBe("ONO");
+    expect(german.point("WSW")).toBe("WSW");
+    expect(danish.point("ENE")).toBe("ØNØ");
+    expect(danish.point("WSW")).toBe("VSV");
+    expect(german.coord([18.5, -37.45])).toBe("18°30′N 037°27′W");
+    expect(danish.coord([18.5, -37.45])).toBe("18°30′N 037°27′V");
+    expect(german.knots(6.4)).toBe("6,4 kn");
+    expect(danish.miles(1234)).toBe("1.234 sm");
+    expect(german.span(3 * 86_400_000)).toBe("3 Tagen");
+    expect(danish.span(86_400_000 * 2)).toBe("2 dage");
+  });
+
+  it("leave the crew's pages in English", () => {
+    expect(translate("DE", "log.title")).toBe(MESSAGES.EN["log.title"]);
+    expect(serverText("DA", "Wrong password")).toBe("Wrong password");
   });
 });

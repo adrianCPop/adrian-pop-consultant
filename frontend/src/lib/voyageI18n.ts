@@ -1,14 +1,22 @@
 /**
- * The voyage pages in two languages: which one a visitor gets, the texts, and
+ * The voyage pages in their languages (the public page in four, the crew's log
+ * and the shore controls in English and Romanian): which one a visitor gets, the texts, and
  * the figures, dates and directions written the way each language writes them.
  * No React here; the pages reach this through `useVoyageTexts`.
  */
 import { compassPoint, formatCoord, type LatLon } from "@/lib/geo";
 import { MESSAGES, SERVER_TEXT_RO, type MessageKey } from "@/lib/voyageMessages";
 
-export type VoyageLanguage = "EN" | "RO";
+export type VoyageLanguage = "EN" | "RO" | "DE" | "DA";
 
-export const LANGUAGES: VoyageLanguage[] = ["EN", "RO"];
+/** The languages of the public page. */
+export const LANGUAGES: VoyageLanguage[] = ["EN", "RO", "DE", "DA"];
+
+/**
+ * The languages of the crew's log and the shore controls. In German or Danish
+ * those two pages read in English.
+ */
+export const CREW_LANGUAGES: VoyageLanguage[] = ["EN", "RO"];
 
 /**
  * Where a visitor's choice is kept on their device. Not the key "language": the
@@ -18,11 +26,46 @@ export const LANGUAGES: VoyageLanguage[] = ["EN", "RO"];
 export const LANGUAGE_STORE = "voyage-language";
 
 /** What each language calls itself. */
-export const LANGUAGE_NAMES: Record<VoyageLanguage, string> = { EN: "English", RO: "Română" };
+export const LANGUAGE_NAMES: Record<VoyageLanguage, string> = {
+  EN: "English",
+  RO: "Română",
+  DE: "Deutsch",
+  DA: "Dansk",
+};
 
-const HTML_LANG: Record<VoyageLanguage, string> = { EN: "en", RO: "ro" };
-const DATE_LOCALE: Record<VoyageLanguage, string> = { EN: "en-GB", RO: "ro-RO" };
-const NUMBER_LOCALE: Record<VoyageLanguage, string> = { EN: "en-US", RO: "ro-RO" };
+/** What the switch shows for each: Danish goes by the country's letters, as on a car. */
+export const LANGUAGE_LABELS: Record<VoyageLanguage, string> = {
+  EN: "EN",
+  RO: "RO",
+  DE: "DE",
+  DA: "DK",
+};
+
+const HTML_LANG: Record<VoyageLanguage, string> = { EN: "en", RO: "ro", DE: "de", DA: "da" };
+const DATE_LOCALE: Record<VoyageLanguage, string> = {
+  EN: "en-GB",
+  RO: "ro-RO",
+  DE: "de-DE",
+  DA: "da-DK",
+};
+const NUMBER_LOCALE: Record<VoyageLanguage, string> = {
+  EN: "en-US",
+  RO: "ro-RO",
+  DE: "de-DE",
+  DA: "da-DK",
+};
+const BY_TAG: Record<string, VoyageLanguage> = { en: "EN", ro: "RO", de: "DE", da: "DA" };
+
+/**
+ * The letters of the compass where a language writes them differently: Romanian
+ * and Danish have V (vest) for west, German has O (Ost) and Danish Ø (øst) for east.
+ */
+const COMPASS_LETTERS: Record<VoyageLanguage, { east?: string; west?: string }> = {
+  EN: {},
+  RO: { west: "V" },
+  DE: { east: "O" },
+  DA: { east: "Ø", west: "V" },
+};
 
 /**
  * The language for this visitor: the one they chose earlier, else the first of
@@ -32,16 +75,14 @@ export const pickLanguage = (
   saved: string | null | undefined,
   preferred: readonly string[]
 ): VoyageLanguage => {
-  if (saved === "EN" || saved === "RO") {
-    return saved;
+  const chosen = LANGUAGES.find((language) => language === saved);
+  if (chosen) {
+    return chosen;
   }
   for (const tag of preferred) {
     const base = tag.toLowerCase().split("-")[0];
-    if (base === "ro") {
-      return "RO";
-    }
-    if (base === "en") {
-      return "EN";
+    if (Object.prototype.hasOwnProperty.call(BY_TAG, base)) {
+      return BY_TAG[base];
     }
   }
   return "EN";
@@ -109,7 +150,8 @@ const messageParts = (language: VoyageLanguage, key: MessageKey, params: Params)
 
 /** What the server said, in the page's language. Unknown sentences pass through. */
 export const serverText = (language: VoyageLanguage, message: string): string => {
-  if (language === "EN") {
+  // The server's sentences reach only the crew's pages, which have two languages.
+  if (language !== "RO") {
     return message;
   }
   // Looked up as its own entry only: "constructor" is not a sentence of the server's.
@@ -126,7 +168,7 @@ export const serverText = (language: VoyageLanguage, message: string): string =>
  * device in English, as `voyageOutbox.ts` wrote it, and put into words here.
  */
 export const outboxErrorText = (language: VoyageLanguage, stored: string): string => {
-  if (language === "EN") {
+  if (language !== "RO") {
     return stored;
   }
   if (stored === MESSAGES.EN["outbox.onePhoto"]) {
@@ -162,8 +204,13 @@ export const makeTexts = (language: VoyageLanguage) => {
     date(time, { timeZone: "UTC", ...options });
 
   /** A compass point as this language writes it: Romanian has V (vest) for W. */
+  const letters = COMPASS_LETTERS[language];
   const point = (english: string) =>
-    language === "RO" && typeof english === "string" ? english.replace(/W/g, "V") : english;
+    typeof english === "string"
+      ? english.replace(/[EW]/g, (letter) =>
+          (letter === "E" ? letters.east : letters.west) ?? letter
+        )
+      : english;
 
   return {
     language,
@@ -177,7 +224,7 @@ export const makeTexts = (language: VoyageLanguage) => {
     point,
     compass: (deg: number) => point(compassPoint(deg)),
     coord: (pos: LatLon) =>
-      formatCoord(pos, language === "RO" ? { west: "V" } : undefined),
+      formatCoord(pos, letters),
 
     // Times at sea are given in UTC.
     dayMonth: (time: number | string) => utc(time, { day: "numeric", month: "short" }),

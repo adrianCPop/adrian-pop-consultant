@@ -282,5 +282,9 @@ A background worker picks up new and historical text entries, detects the
 source language and requests the remaining English, Romanian, German and
 Danish versions together. Only the title and body are sent. MongoDB stores
 the translations with the entry. Editing the text queues a new translation.
-Offline entries enter the queue after crew sync. Reader selections use the
-saved versions, with the original as fallback.
+Offline entries enter the queue after crew sync.
+
+The public page has four languages (EN, RO, DE, DK in the switch; Danish is `da`
+in the code). Entries are shown in the page's language where a version was
+saved, and otherwise in the original, marked as such. The crew's log and the
+shore controls have English and Romanian only.
