@@ -1,10 +1,21 @@
-import { LANGUAGES, LANGUAGE_NAMES } from "@/lib/voyageI18n";
+import { LANGUAGES, LANGUAGE_LABELS, LANGUAGE_NAMES, type VoyageLanguage } from "@/lib/voyageI18n";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import { cn } from "@/lib/utils";
 
-/** English or Romanian, for the voyage pages. The choice is remembered on the device. */
-const VoyageLanguageSwitch = ({ className }: { className?: string }) => {
+/**
+ * The language of a voyage page. The choice is remembered on the device. A page
+ * that has fewer languages names them in `languages`; a visitor who chose one it
+ * does not have reads it in English there.
+ */
+const VoyageLanguageSwitch = ({
+  className,
+  languages = LANGUAGES,
+}: {
+  className?: string;
+  languages?: VoyageLanguage[];
+}) => {
   const { language, setLanguage, t } = useVoyageTexts();
+  const shown = languages.includes(language) ? language : "EN";
 
   return (
     <div
@@ -15,24 +26,24 @@ const VoyageLanguageSwitch = ({ className }: { className?: string }) => {
         className
       )}
     >
-      {LANGUAGES.map((code) => (
+      {languages.map((code) => (
         <button
           key={code}
           type="button"
           // Each language is named in itself, so it is read out properly.
-          lang={code.toLowerCase()}
+          lang={code === "DA" ? "da" : code.toLowerCase()}
           title={LANGUAGE_NAMES[code]}
           aria-label={LANGUAGE_NAMES[code]}
-          aria-pressed={language === code}
+          aria-pressed={shown === code}
           onClick={() => setLanguage(code)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            language === code
+            "rounded-md px-2.5 py-1.5 text-xs font-semibold tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            shown === code
               ? "bg-primary/20 text-primary"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
-          {code}
+          {LANGUAGE_LABELS[code]}
         </button>
       ))}
     </div>

@@ -42,7 +42,6 @@ import {
   fetchSea,
   fetchVoyage,
   photoUrl,
-  logLanguages,
   type LogLanguage,
   type VoyageData,
   type VoyageEntry,
@@ -224,8 +223,8 @@ interface Loaded {
 const VoyagePage = () => {
   const texts = useVoyageTexts();
   const { t, rich, dayMonth, fullDate, clock, miles, knots, compass, coord } = texts;
-  const [logChoice, setLogChoice] = useState<LogLanguage | "original" | null>(null);
-  const logLanguage = logChoice ?? (texts.language === "RO" ? "ro" : "en");
+  // The crew's entries are read in the page's language, where a version was saved.
+  const logLanguage = texts.htmlLang as LogLanguage;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -318,7 +317,7 @@ const VoyagePage = () => {
   const fixes = useMemo(() => toFixes(data?.track ?? []), [data]);
   const trackLine = useMemo<LatLon[]>(() => fixes.map((fix) => fix.pos), [fixes]);
   const entries = useMemo(() => (data?.entries ?? []).map(entry => {
-    const version = logLanguage === "original" ? undefined : entry.translation?.versions[logLanguage];
+    const version = entry.translation?.versions[logLanguage];
     return { ...entry, ...version, textLanguage: version ? logLanguage : entry.translation?.source };
   }), [data, logLanguage]);
 
@@ -802,18 +801,6 @@ const VoyagePage = () => {
     // The map writes a few words of its own.
     texts.language,
   ].join(":");
-
-  const logLanguageSelector = (
-    <label className="mt-3 inline-flex items-center gap-2 text-sm text-muted-foreground">
-      {t("public.logbook.language")}
-      <select className="rounded-md border border-border bg-background px-2 py-1 text-foreground"
-        value={logLanguage} onKeyDown={event => { if (event.key.startsWith("Arrow")) event.stopPropagation(); }}
-        onChange={event => setLogChoice(event.target.value as LogLanguage | "original")}>
-        <option value="original">{t("public.logbook.original")}</option>
-        {Object.entries(logLanguages).map(([code, name]) => <option key={code} value={code} lang={code}>{name}</option>)}
-      </select>
-    </label>
-  );
 
   let statusLine: ReactNode;
   if (status === "planned") {
@@ -1335,8 +1322,6 @@ const VoyagePage = () => {
             ) : null}
           </div>
 
-          {entries.length > 0 && logLanguageSelector}
-
           {entries.length === 0 ? (
             <p className="panel-soft mt-6 rounded-2xl p-5 text-sm text-muted-foreground sm:p-6">
               {t("public.logbook.empty")}
@@ -1367,7 +1352,7 @@ const VoyagePage = () => {
                       ) : null}
                     </div>
 
-                    {logLanguage !== "original" && !entry.textLanguage && (entry.title || entry.body) ? (
+                    {entry.textLanguage !== logLanguage && (entry.title || entry.body) ? (
                       <p className="mt-2 text-xs text-muted-foreground">{t("public.logbook.original")}</p>
                     ) : null}
                     {entry.title ? (
@@ -1591,7 +1576,6 @@ const VoyagePage = () => {
                       <span>{portName(ashore.port.get(shown.entry.id))}</span>
                     ) : null}
                   </div>
-                  {logLanguageSelector}
                   <DialogTitle className="mt-3 break-words font-heading text-xl font-semibold leading-snug text-foreground">
                     {shown.entry.title || t("common.logEntry")}
                   </DialogTitle>

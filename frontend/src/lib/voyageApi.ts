@@ -28,8 +28,8 @@ export interface VoyagePhotoRef {
   h: number;
 }
 
-export const logLanguages = { en: "English", ro: "Română", de: "Deutsch", da: "Dansk" } as const;
-export type LogLanguage = keyof typeof logLanguages;
+/** The languages a saved log entry is translated into. */
+export type LogLanguage = "en" | "ro" | "de" | "da";
 
 export interface VoyageEntry {
   translation?: {
