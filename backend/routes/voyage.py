@@ -28,6 +28,7 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
+from services import voyage_translation
 from services import voyage_core as core
 
 logger = logging.getLogger(__name__)
@@ -493,6 +494,7 @@ async def save_entry(payload: EntryIn, key: dict = Depends(crew_only), db=Depend
                 "t": ts,
                 "title": title,
                 "body": body,
+                "text_revision": voyage_translation.revision(title, body),
                 "lat": lat,
                 "lon": lon,
                 "photos": photos,
@@ -897,6 +899,7 @@ async def _build_public(db) -> dict:
         payload["entries"].append(
             {
                 "id": doc["_id"],
+                "translation": doc.get("translation") if doc.get("translation_revision") == doc.get("text_revision", "legacy") else None,
                 "time": core.to_iso(doc["t"]),
                 "pos": pos,
                 "title": doc.get("title", ""),

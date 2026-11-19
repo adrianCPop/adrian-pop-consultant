@@ -28,7 +28,14 @@ export interface VoyagePhotoRef {
   h: number;
 }
 
+export const logLanguages = { en: "English", ro: "Română", de: "Deutsch", da: "Dansk" } as const;
+export type LogLanguage = keyof typeof logLanguages;
+
 export interface VoyageEntry {
+  translation?: {
+    source: string;
+    versions: Partial<Record<LogLanguage, { title: string; body: string }>>;
+  } | null;
   id: string;
   time: string;
   /** Null when the entry was written ashore or the track has a gap around it. */

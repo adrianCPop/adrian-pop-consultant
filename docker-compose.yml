@@ -36,6 +36,8 @@ services:
       MONGO_DB: ${DB_NAME}               # server.py expects MONGO_DB
       PYTHONUNBUFFERED: "1"
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VOYAGE_TRANSLATION_MODEL: ${VOYAGE_TRANSLATION_MODEL:-}
       RESEND_API_KEY: ${RESEND_API_KEY}
     depends_on:
       mongodb:

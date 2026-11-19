@@ -12,6 +12,7 @@ dropped afterwards), point VOYAGE_TEST_MONGO_URL at it:
 import asyncio
 import base64
 import io
+import json
 import os
 import sys
 import time
@@ -1846,3 +1847,61 @@ def test_freeze_stops_every_write_and_unfreeze_restores_them(ctx):
     ctx.client.post("/api/voyage/admin/freeze", json={"frozen": False}, headers=ctx.admin)
     assert ctx.client.post("/api/voyage/entries", json=entry_body(), headers=bearer(key)).status_code == 200
     assert len(ctx.public()["entries"]) == 1
+
+
+def test_log_translations_are_shared_and_updated_only_for_changed_text(monkeypatch):
+    from services import voyage_translation as tr
+
+    calls = []
+
+    async def fake(title, body):
+        calls.append(body)
+        return {"source": "de", "versions": {"ro": {"title": "Titlu", "body": "Text"}}}
+
+    monkeypatch.setattr(tr, "translate", fake)
+
+    async def check():
+        db = AsyncMongoMockClient().test
+        entries = db.voyage_entries
+        await entries.insert_one({"_id": "old-entry", "title": "Titel", "body": "Meer"})
+        await asyncio.gather(tr.process_one(entries), tr.process_one(entries))
+        saved = await entries.find_one({})
+        assert saved["translation"]["versions"]["ro"]["title"] == "Titlu"
+        assert saved["translation_revision"] == tr.revision("Titel", "Meer")
+        assert not await tr.process_one(entries)
+        await entries.update_one({}, {"$set": {"body": "Wind", "text_revision": tr.revision("Titel", "Wind")}})
+        assert await tr.process_one(entries)
+        assert calls == ["Meer", "Wind"]
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("source", ["en", "ro", "de", "da"])
+def test_translation_provider_requests_only_other_languages(monkeypatch, source):
+    from services import voyage_translation as tr
+
+    targets = set(tr.LANGUAGES) - {source}
+
+    requests = []
+    def respond(request):
+        requests.append(request)
+        assert request.url.path == "/v1/chat/completions"
+        body = json.loads(request.content)
+        assert json.loads(body["messages"][-1]["content"]) == {"title": "Title", "body": "Body"}
+        result = {"source": source, "versions": {
+            lang: {"title": f"title-{lang}", "body": f"body-{lang}"} for lang in targets
+        }}
+        return httpx.Response(200, json={"choices": [
+            {"finish_reason": "stop", "message": {"content": json.dumps(result)}}
+        ]})
+
+    client_type = httpx.AsyncClient
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only")
+    monkeypatch.setattr(tr.httpx, "AsyncClient", lambda **kwargs: client_type(
+        transport=httpx.MockTransport(respond), trust_env=False, **kwargs))
+    result = asyncio.run(tr.translate("Title", "Body"))
+    assert len(requests) == 1
+    assert result["source"] == source
+    assert result["versions"] == {
+        lang: {"title": f"title-{lang}", "body": f"body-{lang}"} for lang in targets
+    }

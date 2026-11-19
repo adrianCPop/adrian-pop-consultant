@@ -270,3 +270,17 @@ to run the same tests against a real MongoDB):
   for non-commercial use, with attribution (shown on the page).
 - **Not yet tried on real hardware:** picking photos on an actual phone, home-screen
   install on iOS and Android, and the OwnTracks app itself.
+
+### Automatic log translations
+
+Pass the existing OpenAI API key to the backend as `OPENAI_API_KEY`.
+The default model is `gpt-4.1-mini`; override it with `VOYAGE_TRANSLATION_MODEL`
+using a Chat Completions model supporting JSON mode. Recreate the backend container after adding the variables. Without a
+key, originals and already saved translations remain readable.
+
+A background worker picks up new and historical text entries, detects the
+source language and requests the remaining English, Romanian, German and
+Danish versions together. Only the title and body are sent. MongoDB stores
+the translations with the entry. Editing the text queues a new translation.
+Offline entries enter the queue after crew sync. Reader selections use the
+saved versions, with the original as fallback.

@@ -1,4 +1,7 @@
 # server.py
+import asyncio
+from contextlib import suppress
+from services import voyage_translation
 import os
 import uuid
 import logging
@@ -75,11 +78,18 @@ async def on_startup():
 
     mongo_client = open_client(MONGO_URL, serverSelectionTimeoutMS=2000)
     db = mongo_client[MONGO_DB_NAME]
+    if os.getenv("OPENAI_API_KEY"):
+        app.state.translation_worker = asyncio.create_task(voyage_translation.worker(db))
     logger.info("Application startup complete.")
 
 @app.on_event("shutdown")
 async def on_shutdown():
     global mongo_client
+    worker = getattr(app.state, "translation_worker", None)
+    if worker:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
     if mongo_client:
         mongo_client.close()
         logger.info("Mongo client closed.")
