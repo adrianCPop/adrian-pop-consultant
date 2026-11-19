@@ -12,6 +12,7 @@ dropped afterwards), point VOYAGE_TEST_MONGO_URL at it:
 import asyncio
 import base64
 import io
+import json
 import os
 import sys
 import time
@@ -1474,6 +1475,112 @@ def test_tracker_app_format_and_basic_auth(ctx):
     assert len(ctx.public()["track"]) == 1
 
 
+def test_a_key_pasted_with_a_space_or_a_line_break_after_it_still_works(ctx):
+    # Copied on a phone, a key easily arrives with something invisible after it.
+    ctx.configure()
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    fix = {"_type": "location", "lat": LAT, "lon": LON, "tst": NOW - HOUR}
+    for pasted in (f"{tracker} ", f"{tracker}\n", f" {tracker}\t"):
+        basic = base64.b64encode(f"boat:{pasted}".encode()).decode()
+        res = ctx.client.post("/api/voyage/track", json=fix, headers={"Authorization": f"Basic {basic}"})
+        assert res.status_code == 200, repr(pasted)
+    res = ctx.client.post("/api/voyage/track", json=fix, headers={"X-Voyage-Key": f"{tracker} "})
+    assert res.status_code == 200
+
+
+def _no_part_of(secret: str, text: str) -> bool:
+    """True when no run of six characters of `secret` appears in `text`."""
+    return not any(secret[start : start + 6] in text for start in range(len(secret) - 5))
+
+
+def test_a_refused_key_is_explained_in_the_log_without_the_key(ctx, caplog):
+    ctx.configure()
+    tracker = ctx.make_key("Phone", "tracker")
+    fix = {"_type": "location", "lat": LAT, "lon": LON, "tst": NOW - HOUR}
+    answers = []
+
+    def refused(headers, path="/api/voyage/track") -> str:
+        caplog.clear()
+        with caplog.at_level("INFO", logger=voyage_routes.logger.name):
+            res = ctx.client.post(path, json=fix, headers=headers)
+        assert res.status_code == 401
+        answers.append(res.json())
+        return " ".join(record.getMessage() for record in caplog.records)
+
+    # Nothing sent at all.
+    assert "no key was sent" in refused({})
+
+    # A user name with no password, as an app with the password field left empty
+    # sends. The user name is not quoted: here it is the key, typed into the wrong field.
+    real = tracker["key"]
+    empty = base64.b64encode(f"{real}:".encode()).decode()
+    line = refused({"Authorization": f"Basic {empty}"})
+    assert "a user name was sent with no password" in line
+    assert _no_part_of(real, line) and _no_part_of(empty, line)
+
+    # A key that is not one of ours: its length is said, and no part of the key.
+    wrong = voyage_core.new_key()
+    basic = base64.b64encode(f"user:{wrong}".encode()).decode()
+    line = refused({"Authorization": f"Basic {basic}"})
+    assert f"{len(wrong)} characters" in line and "matches no link" in line
+    assert _no_part_of(wrong, line) and _no_part_of(basic, line)
+    assert _no_part_of(voyage_core.hash_key(wrong), line)
+
+    # Something was sent that no key can be read from: said as such, and not quoted.
+    # (A header with no scheme, one with a scheme of its own, Basic with no colon.)
+    for header in (
+        real,
+        f"Token {real}",
+        "Basic " + base64.b64encode(real.encode()).decode(),
+    ):
+        line = refused({"Authorization": header})
+        assert "no key could be read" in line, header[:12]
+        assert _no_part_of(real, line) and _no_part_of(header.split(" ")[-1], line)
+
+    # A key that was switched off.
+    res = ctx.client.post(f"/api/voyage/admin/keys/{tracker['id']}/revoke", headers=ctx.admin)
+    assert res.status_code == 200
+    line = refused(bearer(real))
+    assert "switched off" in line and _no_part_of(real, line)
+
+    # Whatever the reason, the caller is told the same thing.
+    assert all(answer == answers[0] for answer in answers)
+
+
+def test_the_refusal_note_holds_nothing_the_caller_wrote(ctx, caplog):
+    ctx.configure()
+    # An address with terminal control characters in it, as percent-escapes.
+    with caplog.at_level("INFO", logger=voyage_routes.logger.name):
+        res = ctx.client.put("/api/voyage/photos/x%1B%5B1A%1B%5B2Kfake", content=b"x")
+    assert res.status_code == 401
+    line = " ".join(record.getMessage() for record in caplog.records)
+    assert "no key was sent" in line
+    assert "\x1b" not in line and "fake" not in line
+    # The address as the code names it, not as it was typed.
+    assert "/voyage/photos/{photo_id}" in line
+
+
+@pytest.mark.parametrize("host", ["[", "[::1", "a]b", "h/any text "])
+def test_a_refused_request_with_a_broken_host_name_is_still_just_refused(ctx, host):
+    res = ctx.client.post(
+        "/api/voyage/track",
+        json={"_type": "location", "lat": LAT, "lon": LON, "tst": NOW - HOUR},
+        headers={"Host": host},
+    )
+    assert res.status_code == 401
+
+
+def test_a_key_arrives_whole_when_the_user_name_is_not_plain_ascii(ctx):
+    # Some apps send the Basic credentials in Latin-1, not UTF-8.
+    ctx.configure()
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    fix = {"_type": "location", "lat": LAT, "lon": LON, "tst": NOW - HOUR}
+    for encoding in ("latin-1", "utf-8"):
+        basic = base64.b64encode(f"Adrián:{tracker}".encode(encoding)).decode()
+        res = ctx.client.post("/api/voyage/track", json=fix, headers={"Authorization": f"Basic {basic}"})
+        assert res.status_code == 200, encoding
+
+
 def test_tracker_app_other_messages_are_accepted_and_ignored(ctx):
     ctx.configure()
     tracker = ctx.make_key("Phone", "tracker")["key"]
@@ -1846,3 +1953,61 @@ def test_freeze_stops_every_write_and_unfreeze_restores_them(ctx):
     ctx.client.post("/api/voyage/admin/freeze", json={"frozen": False}, headers=ctx.admin)
     assert ctx.client.post("/api/voyage/entries", json=entry_body(), headers=bearer(key)).status_code == 200
     assert len(ctx.public()["entries"]) == 1
+
+
+def test_log_translations_are_shared_and_updated_only_for_changed_text(monkeypatch):
+    from services import voyage_translation as tr
+
+    calls = []
+
+    async def fake(title, body):
+        calls.append(body)
+        return {"source": "de", "versions": {"ro": {"title": "Titlu", "body": "Text"}}}
+
+    monkeypatch.setattr(tr, "translate", fake)
+
+    async def check():
+        db = AsyncMongoMockClient().test
+        entries = db.voyage_entries
+        await entries.insert_one({"_id": "old-entry", "title": "Titel", "body": "Meer"})
+        await asyncio.gather(tr.process_one(entries), tr.process_one(entries))
+        saved = await entries.find_one({})
+        assert saved["translation"]["versions"]["ro"]["title"] == "Titlu"
+        assert saved["translation_revision"] == tr.revision("Titel", "Meer")
+        assert not await tr.process_one(entries)
+        await entries.update_one({}, {"$set": {"body": "Wind", "text_revision": tr.revision("Titel", "Wind")}})
+        assert await tr.process_one(entries)
+        assert calls == ["Meer", "Wind"]
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("source", ["en", "ro", "de", "da"])
+def test_translation_provider_requests_only_other_languages(monkeypatch, source):
+    from services import voyage_translation as tr
+
+    targets = set(tr.LANGUAGES) - {source}
+
+    requests = []
+    def respond(request):
+        requests.append(request)
+        assert request.url.path == "/v1/chat/completions"
+        body = json.loads(request.content)
+        assert json.loads(body["messages"][-1]["content"]) == {"title": "Title", "body": "Body"}
+        result = {"source": source, "versions": {
+            lang: {"title": f"title-{lang}", "body": f"body-{lang}"} for lang in targets
+        }}
+        return httpx.Response(200, json={"choices": [
+            {"finish_reason": "stop", "message": {"content": json.dumps(result)}}
+        ]})
+
+    client_type = httpx.AsyncClient
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only")
+    monkeypatch.setattr(tr.httpx, "AsyncClient", lambda **kwargs: client_type(
+        transport=httpx.MockTransport(respond), trust_env=False, **kwargs))
+    result = asyncio.run(tr.translate("Title", "Body"))
+    assert len(requests) == 1
+    assert result["source"] == source
+    assert result["versions"] == {
+        lang: {"title": f"title-{lang}", "body": f"body-{lang}"} for lang in targets
+    }

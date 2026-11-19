@@ -28,6 +28,7 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
+from services import voyage_translation
 from services import voyage_core as core
 
 logger = logging.getLogger(__name__)
@@ -219,19 +220,54 @@ def _client_id(request: Request) -> str:
     return request.client.host if request.client else "?"
 
 
+def _basic_credentials(value: str) -> Optional[Tuple[str, str]]:
+    """The user name and password of a Basic header, or None when it holds no such pair."""
+    try:
+        raw = base64.b64decode(value)
+    except ValueError:
+        return None
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        # Some apps send it in Latin-1. Only the user name can differ: a key is plain ASCII.
+        decoded = raw.decode("latin-1")
+    user, colon, password = decoded.partition(":")
+    return (user, password) if colon else None
+
+
 def _presented_key(request: Request) -> Optional[str]:
-    """The key, from a Bearer header, the password of Basic auth, or X-Voyage-Key."""
+    """The key, from a Bearer header, the password of Basic auth, or X-Voyage-Key.
+
+    Without the blank a key often picks up when it is pasted on a phone: a key
+    has none of its own.
+    """
     scheme, _, value = request.headers.get("authorization", "").partition(" ")
     scheme, value = scheme.lower(), value.strip()
     if scheme == "bearer" and value:
         return value
     if scheme == "basic" and value:
-        try:
-            decoded = base64.b64decode(value).decode("utf-8")
-        except ValueError:
-            return None
-        return decoded.partition(":")[2] or None
-    return request.headers.get("x-voyage-key") or None
+        credentials = _basic_credentials(value)
+        return (credentials[1].strip() or None) if credentials else None
+    return request.headers.get("x-voyage-key", "").strip() or None
+
+
+def _why_refused(request: Request, key: Optional[str], doc: Optional[dict]) -> str:
+    """Why a key was refused, for whoever is setting a device up. Never the key, nor
+    anything else the caller wrote: the address is given as the code names it."""
+    route = getattr(request.scope.get("route"), "path", "a voyage address")
+    scheme, _, value = request.headers.get("authorization", "").partition(" ")
+    if key and doc:
+        why = "the key has been switched off"
+    elif key:
+        why = f"a key of {len(key)} characters that matches no link"
+    elif scheme.lower() == "basic" and _basic_credentials(value.strip()):
+        # What an app with the password field left empty sends.
+        why = "a user name was sent with no password"
+    elif request.headers.get("authorization") or request.headers.get("x-voyage-key"):
+        why = "something was sent, but no key could be read from it"
+    else:
+        why = "no key was sent"
+    return f"Key refused on {route}: {why}"
 
 
 def _key_auth(*kinds: str):
@@ -240,6 +276,7 @@ def _key_auth(*kinds: str):
         key = _presented_key(request)
         doc = await db.voyage_keys.find_one({"key_hash": core.hash_key(key)}) if key else None
         if not doc or doc.get("revoked_at"):
+            logger.info(_why_refused(request, key, doc))
             raise HTTPException(401, "This link is not valid, or it has been switched off")
         if doc["kind"] not in kinds:
             raise HTTPException(403, "This key is not allowed to do that")
@@ -493,6 +530,7 @@ async def save_entry(payload: EntryIn, key: dict = Depends(crew_only), db=Depend
                 "t": ts,
                 "title": title,
                 "body": body,
+                "text_revision": voyage_translation.revision(title, body),
                 "lat": lat,
                 "lon": lon,
                 "photos": photos,
@@ -897,6 +935,7 @@ async def _build_public(db) -> dict:
         payload["entries"].append(
             {
                 "id": doc["_id"],
+                "translation": doc.get("translation") if doc.get("translation_revision") == doc.get("text_revision", "legacy") else None,
                 "time": core.to_iso(doc["t"]),
                 "pos": pos,
                 "title": doc.get("title", ""),

@@ -347,14 +347,12 @@ const VoyageMap = ({
     });
     pinMarkersRef.current = pinMarkers;
 
-    // The ketch, with the boat's name under it: the lettering on the drawn hull is
-    // too small to read at this size.
+    // The ketch. Her name is lettered on the drawn hull and nowhere else on the map.
     const ketchIcon = (extra = "") =>
       L.divIcon({
         className: "apolodor-boat",
         html:
           `<img src="/apolodor-ketch-soulmate.svg" width="72" height="44" alt="">` +
-          `<span class="apolodor-boat__name" aria-hidden="true">Soulmate</span>` +
           extra,
         iconSize: [72, 44],
         iconAnchor: [36, 41],
