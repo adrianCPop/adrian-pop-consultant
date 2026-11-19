@@ -16,7 +16,7 @@ export default function VoyageTitle({ language, origin, destination, to }: Props
           <h1>Apolodor pe Atlantic</h1>
           <p>{origin} <span aria-label={to}>→</span> {destination}</p>
         </div>
-        <img src="/apolodor-ketch.svg" width="196" height="120"
+        <img src="/apolodor-ketch-soulmate.svg" width="196" height="120"
           alt="Apolodor pe Soulmate, un Motiva 46 cu două catarge" />
       </div>
     );

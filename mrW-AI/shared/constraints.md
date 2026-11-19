@@ -27,6 +27,7 @@
 - Backend logging: use `logging.getLogger(__name__)` per module — all route files follow this
 - Backend error handling: catch exceptions, log with `logger.error`, raise `HTTPException` — `backend/routes/articles.py:44`
 - Frontend i18n: all user-visible strings must go through `useTranslation` hook — `frontend/src/hooks/useTranslation.ts`
+  - Exception since 2026-11-16: the voyage pages use `useVoyageTexts` (`frontend/src/lib/useVoyageTexts.ts`, texts in `frontend/src/lib/voyageMessages.ts`). The routed site never mounts `TranslationProvider`, so `useTranslation` would throw there
 - Path alias `@/` maps to `frontend/src/` — `frontend/tsconfig.app.json`
 
 ## Testing
@@ -41,3 +42,5 @@
 - Frontend listens on port 80 (container); mapped to `FRONTEND_PORT` (default 3000) — `docker-compose.yml:56`
 - MongoDB listens on 27017 (container); mapped to `MONGODB_PORT` (default 27018) — `docker-compose.yml:9`
 - Backend depends on mongodb `service_healthy` — do not change healthcheck without updating `depends_on` — `docker-compose.yml:39`
+- Public production traffic for `adrianpop.tech` is routed by `/root/docker-compose.yml` on the VPS to the `portfolio-frontend` service, which consumes the locally built `adrian-pop-consultant-frontend` image
+- The build source for the portfolio stack on the VPS is `/root/APT/adrian-pop-consultant`; that repo currently contains local server-side changes in `backend/server.py` and `docker-compose.yml`, so deploys should avoid blind `git pull --rebase` or overwrite flows
