@@ -210,10 +210,12 @@ def thin(points: Sequence, max_points: int) -> list:
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 FULL_EDGE = 1600
 THUMB_EDGE = 480
+# A photo sent at full quality is also kept this large, beside the size the page shows.
+MAX_EDGE = 3840
 _ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 
-# The log page shrinks photos to 1600 px before sending, so anything much larger
-# did not come from it. Decoding is what costs memory, so the size is checked first.
+# The log page shrinks photos before sending (to 1600 px, or 3840 px at full
+# quality), so anything much larger did not come from it. Decoding is what costs memory, so the size is checked first.
 MAX_PIXELS = 16_000_000
 # One photo is decoded at a time: a decoded image is tens of megabytes.
 _decode_lock = threading.Lock()
@@ -233,8 +235,11 @@ def _encode(image: Image.Image, quality: int) -> bytes:
     return buffer.getvalue()
 
 
-def process_image(data: bytes) -> dict:
+def process_image(data: bytes, best: bool = False) -> dict:
     """Decode an upload and write it out again as plain JPEGs.
+
+    With `best`, a photo larger than the size the page shows is also kept at up
+    to MAX_EDGE, under "max" (None when the photo was no larger).
 
     Nothing of the original file is kept: the pixels are re-encoded, which drops
     embedded metadata (including the phone's GPS tag) and anything that merely
@@ -255,6 +260,11 @@ def process_image(data: bytes) -> dict:
             with Image.open(io.BytesIO(data)) as source:
                 image = ImageOps.exif_transpose(source).convert("RGB")
             image.info.clear()  # comments and other leftovers would be copied into the output
+            large = None
+            if best and max(image.size) > FULL_EDGE:
+                large = image.copy()
+                large.thumbnail((MAX_EDGE, MAX_EDGE), Image.Resampling.LANCZOS)
+                large = _encode(large, 90)
             image.thumbnail((FULL_EDGE, FULL_EDGE), Image.Resampling.LANCZOS)
             thumb = image.copy()
             thumb.thumbnail((THUMB_EDGE, THUMB_EDGE), Image.Resampling.LANCZOS)
@@ -262,6 +272,7 @@ def process_image(data: bytes) -> dict:
             return {
                 "data": _encode(image, 82),
                 "thumb": _encode(thumb, 76),
+                "max": large,
                 "w": image.width,
                 "h": image.height,
             }

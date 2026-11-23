@@ -2011,3 +2011,269 @@ def test_translation_provider_requests_only_other_languages(monkeypatch, source)
     assert result["versions"] == {
         lang: {"title": f"title-{lang}", "body": f"body-{lang}"} for lang in targets
     }
+
+
+# --------------------------------------------------------------------------- the crew's own entries
+
+
+def put_photo(ctx, key: str, quality: str = "", size=(400, 300)) -> str:
+    photo_id = str(uuid.uuid4())
+    res = ctx.client.put(
+        f"/api/voyage/photos/{photo_id}{quality}",
+        content=jpeg_bytes(*size),
+        headers={**bearer(key), "Content-Type": "image/jpeg"},
+    )
+    assert res.status_code == 200, res.text
+    return photo_id
+
+
+def test_crew_corrects_an_entry_and_keeps_its_time_and_position(ctx):
+    ctx.configure()
+    key = ctx.make_key()["key"]
+    kept, dropped = put_photo(ctx, key), put_photo(ctx, key)
+    body = entry_body(
+        photo_ids=[kept, dropped], position={"lat": 24.0, "lon": -22.0, "accuracy": 8}
+    )
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(key)).status_code == 200
+    before = ctx.public()["entries"][0]
+    assert before["pos"] == [24.0, -22.0]
+
+    mine = ctx.client.get("/api/voyage/entries/mine", headers=bearer(key)).json()["entries"]
+    assert [(e["id"], e["title"], e["body"]) for e in mine] == [
+        (body["id"], body["title"], body["body"])
+    ]
+    assert [photo["id"] for photo in mine[0]["photos"]] == [kept, dropped]
+
+    # The correction comes without a position, as the page sends it.
+    fixed = {**body, "title": "Flying fish for lunch", "photo_ids": [kept], "position": None}
+    assert ctx.client.post("/api/voyage/entries", json=fixed, headers=bearer(key)).status_code == 200
+    entries = ctx.public()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["title"] == "Flying fish for lunch"
+    assert entries[0]["time"] == before["time"]
+    assert entries[0]["pos"] == [24.0, -22.0]
+    assert [photo["id"] for photo in entries[0]["photos"]] == [kept]
+    assert ctx.client.get(f"/api/voyage/photos/{kept}").status_code == 200
+    assert ctx.client.get(f"/api/voyage/photos/{dropped}").status_code == 404
+
+
+def test_an_old_entry_can_still_be_corrected(ctx, monkeypatch):
+    ctx.configure(departure_h=-24 * 80)
+    key = ctx.make_key()["key"]
+    body = entry_body(written_at=iso(NOW - 50 * 24 * HOUR))
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(key)).status_code == 200
+    monkeypatch.setattr(voyage_routes.time, "time", lambda: NOW + 30 * 24 * HOUR)
+    res = ctx.client.post(
+        "/api/voyage/entries", json={**body, "title": "Corrected"}, headers=bearer(key)
+    )
+    assert res.status_code == 200, res.text
+    # A new entry that old is still refused.
+    fresh = entry_body(written_at=iso(NOW - 50 * 24 * HOUR))
+    assert ctx.client.post("/api/voyage/entries", json=fresh, headers=bearer(key)).status_code == 422
+
+
+def test_crew_deletes_only_their_own_entries(ctx):
+    ctx.configure()
+    mine, theirs = ctx.make_key("Adrian")["key"], ctx.make_key("Ioana")["key"]
+    photo_id = put_photo(ctx, mine)
+    body = entry_body(photo_ids=[photo_id], position={"lat": 24.0, "lon": -22.0, "accuracy": 8})
+    other = entry_body(title="Ioana's watch")
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(mine)).status_code == 200
+    assert ctx.client.post("/api/voyage/entries", json=other, headers=bearer(theirs)).status_code == 200
+
+    listed = ctx.client.get("/api/voyage/entries/mine", headers=bearer(theirs)).json()["entries"]
+    assert [entry["id"] for entry in listed] == [other["id"]]
+    assert ctx.client.get("/api/voyage/entries/mine").status_code == 401
+
+    res = ctx.client.delete(f"/api/voyage/entries/{body['id']}", headers=bearer(theirs))
+    assert res.status_code == 409
+    assert ctx.client.delete(f"/api/voyage/entries/{body['id']}").status_code == 401
+    assert len(ctx.public()["entries"]) == 2
+
+    res = ctx.client.delete(f"/api/voyage/entries/{body['id']}", headers=bearer(mine))
+    assert res.status_code == 200
+    assert [entry["id"] for entry in ctx.public()["entries"]] == [other["id"]]
+    assert ctx.client.get(f"/api/voyage/photos/{photo_id}").status_code == 404
+    assert ctx.client.delete(f"/api/voyage/entries/{body['id']}", headers=bearer(mine)).status_code == 404
+
+    tracker = ctx.make_key("Phone", "tracker")["key"]
+    res = ctx.client.delete(f"/api/voyage/entries/{other['id']}", headers=bearer(tracker))
+    assert res.status_code == 403
+
+
+def test_a_paused_log_takes_no_deletions(ctx):
+    ctx.configure()
+    key = ctx.make_key()["key"]
+    body = entry_body()
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(key)).status_code == 200
+    ctx.client.post("/api/voyage/admin/freeze", json={"frozen": True}, headers=ctx.admin)
+    assert ctx.client.delete(f"/api/voyage/entries/{body['id']}", headers=bearer(key)).status_code == 423
+    assert len(ctx.public()["entries"]) == 1
+
+
+# --------------------------------------------------------------------------- photo quality
+
+
+def test_a_photo_sent_at_full_quality_is_also_kept_large(ctx):
+    ctx.configure()
+    key = ctx.make_key()["key"]
+    best = put_photo(ctx, key, "?quality=max", size=(4200, 2800))
+    usual = put_photo(ctx, key, size=(4200, 2800))
+    small = put_photo(ctx, key, "?quality=max", size=(800, 600))
+
+    def edge(photo_id: str, size: str) -> int:
+        res = ctx.client.get(f"/api/voyage/photos/{photo_id}?size={size}")
+        assert res.status_code == 200
+        return max(Image.open(io.BytesIO(res.content)).size)
+
+    assert (edge(best, "full"), edge(best, "max")) == (1600, 3840)
+    assert (edge(usual, "full"), edge(usual, "max")) == (1600, 1600)
+    assert (edge(small, "full"), edge(small, "max")) == (800, 800)
+
+    body = entry_body(photo_ids=[best, usual, small])
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(key)).status_code == 200
+    photos = ctx.public()["entries"][0]["photos"]
+    assert [photo.get("max", False) for photo in photos] == [True, False, False]
+    assert (photos[0]["w"], photos[0]["h"]) == (1600, 1067)
+
+
+# --------------------------------------------------------------------------- videos
+
+PART = voyage_routes.VIDEO_PART_BYTES
+
+
+def mp4_bytes(length: int) -> bytes:
+    head = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+    return head + bytes(index % 251 for index in range(length - len(head)))
+
+
+def put_video(ctx, key: str, data: bytes, video_id: str = "", **done) -> str:
+    video_id = video_id or str(uuid.uuid4())
+    parts = [data[start : start + PART] for start in range(0, len(data), PART)]
+    for number, part in enumerate(parts):
+        res = ctx.client.put(
+            f"/api/voyage/videos/{video_id}/parts/{number}", content=part, headers=bearer(key)
+        )
+        assert res.status_code == 200, res.text
+    res = ctx.client.post(
+        f"/api/voyage/videos/{video_id}/finish",
+        json={"parts": len(parts), "w": 1920, "h": 1080, "duration": 12.34, **done},
+        headers=bearer(key),
+    )
+    assert res.status_code == 200, res.text
+    return video_id
+
+
+def test_video_arrives_in_parts_and_plays_by_byte_range(ctx):
+    ctx.configure()
+    key = ctx.make_key()["key"]
+    film = mp4_bytes(2 * PART + 1000)
+    poster = put_photo(ctx, key)
+    video_id = put_video(ctx, key, film, poster_id=poster)
+
+    body = entry_body(photo_ids=[video_id])
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(key)).status_code == 200
+    assert ctx.public()["entries"][0]["photos"] == [
+        {"id": video_id, "kind": "video", "w": 1920, "h": 1080, "dur": 12.3, "poster": poster}
+    ]
+
+    whole = ctx.client.get(f"/api/voyage/videos/{video_id}")
+    assert whole.status_code == 200
+    assert whole.headers["content-type"] == "video/mp4"
+    assert whole.headers["accept-ranges"] == "bytes"
+    assert whole.headers["x-content-type-options"] == "nosniff"
+    assert whole.content == film
+
+    def ranged(value: str):
+        return ctx.client.get(f"/api/voyage/videos/{video_id}", headers={"Range": value})
+
+    first = ranged("bytes=0-1")
+    assert (first.status_code, first.content) == (206, film[:2])
+    assert first.headers["content-range"] == f"bytes 0-1/{len(film)}"
+    across = ranged(f"bytes={PART - 5}-{PART + 4}")
+    assert (across.status_code, across.content) == (206, film[PART - 5 : PART + 5])
+    tail = ranged(f"bytes={2 * PART - 10}-")
+    assert tail.content == film[2 * PART - 10 :]
+    assert tail.headers["content-length"] == str(1010)
+    assert ranged("bytes=-300").content == film[-300:]
+    assert ranged(f"bytes=0-{len(film) + 500}").content == film
+    beyond = ranged(f"bytes={len(film)}-")
+    assert beyond.status_code == 416
+    assert beyond.headers["content-range"] == f"bytes */{len(film)}"
+
+    # Sending it all again changes nothing.
+    assert put_video(ctx, key, film, video_id=video_id) == video_id
+    assert ctx.client.get(f"/api/voyage/videos/{video_id}").content == film
+
+    # Deleting the entry removes the video and the picture shown before it plays.
+    assert ctx.client.delete(f"/api/voyage/entries/{body['id']}", headers=bearer(key)).status_code == 200
+    assert ctx.client.get(f"/api/voyage/videos/{video_id}").status_code == 404
+    assert ctx.client.get(f"/api/voyage/photos/{poster}").status_code == 404
+
+
+def test_video_upload_refuses_what_it_should(ctx):
+    ctx.configure()
+    key, other = ctx.make_key("Adrian")["key"], ctx.make_key("Ioana")["key"]
+    video_id = str(uuid.uuid4())
+    url = f"/api/voyage/videos/{video_id}"
+
+    assert ctx.client.put(f"{url}/parts/0", content=mp4_bytes(500)).status_code == 401
+    res = ctx.client.put(f"{url}/parts/0", content=b"<html>not a film</html>", headers=bearer(key))
+    assert res.status_code == 415
+    res = ctx.client.put(f"{url}/parts/0", content=jpeg_bytes(200, 100), headers=bearer(key))
+    assert res.status_code == 415
+    res = ctx.client.put(f"{url}/parts/0", content=b"", headers=bearer(key))
+    assert res.status_code == 422
+    res = ctx.client.put(f"{url}/parts/0", content=mp4_bytes(PART + 1), headers=bearer(key))
+    assert res.status_code == 413
+    res = ctx.client.put(
+        f"{url}/parts/{voyage_routes.MAX_VIDEO_PARTS}", content=mp4_bytes(500), headers=bearer(key)
+    )
+    assert res.status_code == 413
+    # Part 0 says what kind of file it is, so nothing is taken before it.
+    res = ctx.client.put(f"{url}/parts/1", content=mp4_bytes(500), headers=bearer(key))
+    assert (res.status_code, res.json()["missing_parts"]) == (409, [0])
+
+    assert ctx.client.put(f"{url}/parts/0", content=mp4_bytes(PART), headers=bearer(key)).status_code == 200
+    assert ctx.client.put(f"{url}/parts/1", content=mp4_bytes(500), headers=bearer(other)).status_code == 409
+    done = {"parts": 3, "w": 0, "h": 0, "duration": 0}
+    assert ctx.client.post(f"{url}/finish", json=done, headers=bearer(other)).status_code == 409
+    res = ctx.client.post(f"{url}/finish", json=done, headers=bearer(key))
+    assert (res.status_code, res.json()["missing_parts"]) == (409, [1, 2])
+
+    # Not finished: it cannot be watched, nor put on an entry.
+    assert ctx.client.get(url).status_code == 404
+    res = ctx.client.post(
+        "/api/voyage/entries", json=entry_body(photo_ids=[video_id]), headers=bearer(key)
+    )
+    assert (res.status_code, res.json()["missing_photos"]) == (409, [video_id])
+    # Nor can someone else's finished video.
+    theirs = put_video(ctx, other, mp4_bytes(900))
+    res = ctx.client.post(
+        "/api/voyage/entries", json=entry_body(photo_ids=[theirs]), headers=bearer(key)
+    )
+    assert res.status_code == 409
+
+
+def test_a_video_dropped_in_a_correction_is_removed(ctx):
+    ctx.configure()
+    key = ctx.make_key()["key"]
+    photo_id, video_id = put_photo(ctx, key), put_video(ctx, key, mp4_bytes(3000))
+    body = entry_body(photo_ids=[photo_id, video_id])
+    assert ctx.client.post("/api/voyage/entries", json=body, headers=bearer(key)).status_code == 200
+    kinds = [photo.get("kind", "photo") for photo in ctx.public()["entries"][0]["photos"]]
+    assert kinds == ["photo", "video"]
+
+    res = ctx.client.post(
+        "/api/voyage/entries", json={**body, "photo_ids": [photo_id]}, headers=bearer(key)
+    )
+    assert res.status_code == 200
+    assert ctx.client.get(f"/api/voyage/videos/{video_id}").status_code == 404
+    assert ctx.client.get(f"/api/voyage/photos/{photo_id}").status_code == 200
+
+    quicktime = b"\x00\x00\x00\x14ftypqt  " + bytes(200)
+    webm = b"\x1a\x45\xdf\xa3" + bytes(200)
+    for data, expected in ((quicktime, "video/quicktime"), (webm, "video/webm")):
+        other_id = put_video(ctx, key, data)
+        assert ctx.client.get(f"/api/voyage/videos/{other_id}").headers["content-type"] == expected
+

@@ -23,7 +23,7 @@ import uuid
 from typing import Annotated, List, Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
@@ -58,6 +58,15 @@ MIN_TRACKER_SPACING_S = 120  # closer fixes from the tracking app add nothing at
 ENTRIES_PER_HOUR = 60
 PHOTOS_PER_HOUR = 150
 MAX_PHOTOS_TOTAL = 3000
+# A video arrives in parts, so a dropped connection costs one part and not the film.
+VIDEO_PART_BYTES = 2 * 1024 * 1024
+MAX_VIDEO_BYTES = 200 * 1024 * 1024
+MAX_VIDEO_PARTS = MAX_VIDEO_BYTES // VIDEO_PART_BYTES
+MAX_VIDEOS_TOTAL = 300
+MAX_VIDEO_STORE_BYTES = 20 * 1024**3
+VIDEOS_PER_HOUR = 20
+VIDEO_TYPES = {"mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm"}
+MY_ENTRIES_LIMIT = 200
 MAX_ACTIVE_KEYS = 50
 MAX_TRACK_POINTS = 2000
 
@@ -109,8 +118,11 @@ class _LimitedBodyRoute(APIRoute):
         handler = super().get_route_handler()
 
         async def limited(request: Request):
-            is_photo = request.method == "PUT" and "/photos/" in request.url.path
-            limit = core.MAX_UPLOAD_BYTES if is_photo else JSON_BODY_LIMIT
+            limit = JSON_BODY_LIMIT
+            if request.method == "PUT" and "/photos/" in request.url.path:
+                limit = core.MAX_UPLOAD_BYTES
+            elif request.method == "PUT" and "/videos/" in request.url.path:
+                limit = VIDEO_PART_BYTES
             declared = request.headers.get("content-length", "")
             if declared.isdigit() and int(declared) > limit:
                 return JSONResponse(status_code=413, content={"detail": "That is too large"})
@@ -204,6 +216,7 @@ async def _ensure_indexes(db) -> None:
         await db.voyage_positions.create_index("t")
         await db.voyage_positions.create_index([("key_id", 1), ("t", 1)], unique=True)
         await db.voyage_entries.create_index("t")
+        await db.voyage_video_chunks.create_index("video_id")
         _indexes_ready = True
     except Exception as error:
         logger.warning("Could not create voyage indexes: %s", error)
@@ -482,39 +495,47 @@ async def save_entry(payload: EntryIn, key: dict = Depends(crew_only), db=Depend
     now = int(time.time())
     if ts > now + FUTURE_SLACK_S:
         ts = now
-    if ts < now - MAX_ENTRY_AGE_S:
+
+    existing = await db.voyage_entries.find_one(
+        {"_id": payload.id}, {"key_id": 1, "lat": 1, "lon": 1, "photos": 1}
+    )
+    if existing and existing["key_id"] != key["_id"]:
+        raise HTTPException(409, "That entry belongs to someone else")
+    # An entry that is already there can be corrected however old it is.
+    if not existing and ts < now - MAX_ENTRY_AGE_S:
         raise HTTPException(422, "This entry is too old to add")
 
     if not limiter.allow(f"entries:{key['_id']}", ENTRIES_PER_HOUR, 3600):
         raise HTTPException(429, "Too many entries in an hour")
 
-    existing = await db.voyage_entries.find_one({"_id": payload.id}, {"key_id": 1})
-    if existing and existing["key_id"] != key["_id"]:
-        raise HTTPException(409, "That entry belongs to someone else")
-
-    # The photos' sizes are copied onto the entry, so showing the logbook never
-    # has to open the (large) photo documents.
+    # The photos' and videos' sizes are copied onto the entry, so showing the
+    # logbook never has to open the (large) documents that hold them.
     photo_ids = list(dict.fromkeys(payload.photo_ids))
     photos = []
     if photo_ids:
-        found = await db.voyage_photos.find(
-            {"_id": {"$in": photo_ids}, "key_id": key["_id"]}, {"w": 1, "h": 1}
+        mine = {"_id": {"$in": photo_ids}, "key_id": key["_id"]}
+        found = await db.voyage_photos.find(mine, {"w": 1, "h": 1, "has_max": 1}).to_list(
+            length=None
+        )
+        films = await db.voyage_videos.find(
+            {**mine, "complete": True}, {"w": 1, "h": 1, "dur": 1, "poster": 1}
         ).to_list(length=None)
-        sizes = {photo["_id"]: photo for photo in found}
-        missing = [photo_id for photo_id in photo_ids if photo_id not in sizes]
+        refs = {photo["_id"]: _photo_ref(photo) for photo in found}
+        refs.update({video["_id"]: _video_ref(video) for video in films})
+        missing = [photo_id for photo_id in photo_ids if photo_id not in refs]
         if missing:
             return JSONResponse(
                 status_code=409,
                 content={"detail": "Some photos have not arrived yet", "missing_photos": missing},
             )
-        photos = [
-            {"id": photo_id, "w": sizes[photo_id]["w"], "h": sizes[photo_id]["h"]}
-            for photo_id in photo_ids
-        ]
+        photos = [refs[photo_id] for photo_id in photo_ids]
 
     # A position from the device counts only if it is real GPS; otherwise the
-    # public page reads the entry's position off the track.
+    # public page reads the entry's position off the track. An entry sent again
+    # (a retry, or a correction) keeps the position it already had.
     lat = lon = None
+    if existing:
+        lat, lon = existing.get("lat"), existing.get("lon")
     device = payload.position
     if device and device.accuracy is not None and device.accuracy <= MAX_DEVICE_ACCURACY_M:
         stored, _ = await _store_fix(
@@ -542,24 +563,116 @@ async def save_entry(payload: EntryIn, key: dict = Depends(crew_only), db=Depend
         },
         upsert=True,
     )
+    # Photos and videos taken off the entry in a correction are not kept.
+    if existing:
+        await _remove_media(
+            db, [ref for ref in existing.get("photos", []) if ref["id"] not in photo_ids]
+        )
     _changed()
     return {"ok": True, "id": payload.id}
 
 
+@router.get("/entries/mine")
+async def my_entries(key: dict = Depends(crew_only), db=Depends(get_db)):
+    """What this person has in the logbook, newest first, to correct or remove."""
+    docs = (
+        await db.voyage_entries.find({"key_id": key["_id"]})
+        .sort("t", -1)
+        .to_list(length=MY_ENTRIES_LIMIT)
+    )
+    return {
+        "entries": [
+            {
+                "id": doc["_id"],
+                "time": core.to_iso(doc["t"]),
+                "title": doc.get("title", ""),
+                "body": doc.get("body", ""),
+                "photos": doc.get("photos", []),
+            }
+            for doc in docs
+        ]
+    }
+
+
+@router.delete("/entries/{entry_id}")
+async def delete_my_entry(entry_id: str, key: dict = Depends(crew_only), db=Depends(get_db)):
+    """Remove one of this person's own entries, with its photos and videos."""
+    await _ensure_not_frozen(db)
+    entry = await db.voyage_entries.find_one({"_id": entry_id}) if ID_RE.fullmatch(entry_id) else None
+    if not entry:
+        raise HTTPException(404, "No such entry")
+    if entry.get("key_id") != key["_id"]:
+        raise HTTPException(409, "That entry belongs to someone else")
+    await _remove_entry(db, entry)
+    return {"ok": True}
+
+
+def _photo_ref(photo: dict) -> dict:
+    ref = {"id": photo["_id"], "w": photo["w"], "h": photo["h"]}
+    if photo.get("has_max"):
+        ref["max"] = True
+    return ref
+
+
+def _video_ref(video: dict) -> dict:
+    return {
+        "id": video["_id"],
+        "kind": "video",
+        "w": video.get("w", 0),
+        "h": video.get("h", 0),
+        "dur": video.get("dur", 0),
+        "poster": video.get("poster"),
+    }
+
+
+async def _remove_media(db, refs: List[dict]) -> None:
+    """Delete the photos and videos these references point at."""
+    videos = [ref["id"] for ref in refs if ref.get("kind") == "video"]
+    photos = [ref["id"] for ref in refs if ref.get("kind") != "video"]
+    photos += [ref["poster"] for ref in refs if ref.get("kind") == "video" and ref.get("poster")]
+    if photos:
+        await db.voyage_photos.delete_many({"_id": {"$in": photos}})
+    if videos:
+        await db.voyage_videos.delete_many({"_id": {"$in": videos}})
+        await db.voyage_video_chunks.delete_many({"video_id": {"$in": videos}})
+
+
+async def _remove_entry(db, entry: dict) -> None:
+    """Remove an entry, its photos and videos, and the position it brought with it."""
+    await _remove_media(db, entry.get("photos", []))
+    await db.voyage_positions.delete_many(
+        {"key_id": entry.get("key_id"), "t": entry["t"], "src": "entry"}
+    )
+    await db.voyage_entries.delete_one({"_id": entry["_id"]})
+    _changed()
+
+
 @router.put("/photos/{photo_id}")
 async def upload_photo(
-    photo_id: str, request: Request, key: dict = Depends(crew_only), db=Depends(get_db)
+    photo_id: str,
+    request: Request,
+    quality: str = "low",
+    key: dict = Depends(crew_only),
+    db=Depends(get_db),
 ):
-    """Upload one photo as the raw request body. The same `photo_id` can be retried."""
+    """Upload one photo as the raw request body. The same `photo_id` can be retried.
+
+    `quality=max` also keeps the photo at up to 3840 px, for whoever opens it in
+    full; the page itself always shows the 1600 px one.
+    """
     await _ensure_not_frozen(db)
     if not ID_RE.fullmatch(photo_id):
         raise HTTPException(422, "Bad photo id")
 
-    existing = await db.voyage_photos.find_one({"_id": photo_id}, {"key_id": 1, "w": 1, "h": 1})
+    existing = await db.voyage_photos.find_one(
+        {"_id": photo_id}, {"key_id": 1, "w": 1, "h": 1, "has_max": 1}
+    )
     if existing:
         if existing["key_id"] != key["_id"]:
             raise HTTPException(409, "That photo belongs to someone else")
-        return {"id": photo_id, "w": existing["w"], "h": existing["h"]}
+        return _photo_ref(existing)
+    if await db.voyage_videos.find_one({"_id": photo_id}, {"_id": 1}):
+        raise HTTPException(409, "That photo belongs to someone else")
 
     if not limiter.allow(f"photos:{key['_id']}", PHOTOS_PER_HOUR, 3600):
         raise HTTPException(429, "Too many photos in an hour")
@@ -568,30 +681,222 @@ async def upload_photo(
 
     data = await request.body()  # capped by _LimitedBodyRoute
     try:
-        photo = await asyncio.to_thread(core.process_image, data)
+        photo = await asyncio.to_thread(core.process_image, data, quality == "max")
     except core.ImageRejected as error:
         raise HTTPException(415, str(error))
     except core.ImageBusy as error:
         raise HTTPException(503, str(error))
 
+    stored = {
+        "_id": photo_id,
+        "key_id": key["_id"],
+        "data": photo["data"],
+        "thumb": photo["thumb"],
+        "w": photo["w"],
+        "h": photo["h"],
+        "created_at": int(time.time()),
+    }
+    if photo.get("max"):
+        stored.update({"max": photo["max"], "has_max": True})
     try:
-        await db.voyage_photos.insert_one(
-            {
-                "_id": photo_id,
-                "key_id": key["_id"],
-                "data": photo["data"],
-                "thumb": photo["thumb"],
-                "w": photo["w"],
-                "h": photo["h"],
-                "created_at": int(time.time()),
-            }
-        )
+        await db.voyage_photos.insert_one(stored)
     except DuplicateKeyError:
         pass  # the same upload arrived twice at once
-    return {"id": photo_id, "w": photo["w"], "h": photo["h"]}
+    return _photo_ref(stored)
+
+
+# --------------------------------------------------------------------------- videos
+
+
+def _video_type(start: bytes) -> Optional[str]:
+    """Which kind of film these first bytes begin, of the kinds a browser can play."""
+    if start[4:8] == b"ftyp":
+        return "mov" if start[8:10] == b"qt" else "mp4"
+    if start[:4] == b"\x1a\x45\xdf\xa3":
+        return "webm"
+    return None
+
+
+@router.put("/videos/{video_id}/parts/{number}")
+async def upload_video_part(
+    video_id: str,
+    number: int,
+    request: Request,
+    key: dict = Depends(crew_only),
+    db=Depends(get_db),
+):
+    """Upload one part of a video as the raw request body, part 0 first.
+
+    A video is stored as it is sent (the server has nothing to re-encode it
+    with), so only files that begin as MP4, MOV or WebM are taken. Any part can
+    be sent again.
+    """
+    await _ensure_not_frozen(db)
+    if not ID_RE.fullmatch(video_id):
+        raise HTTPException(422, "Bad video id")
+    if not 0 <= number < MAX_VIDEO_PARTS:
+        raise HTTPException(413, "This video is too large")
+
+    video = await db.voyage_videos.find_one({"_id": video_id}, {"key_id": 1, "complete": 1})
+    if video and video["key_id"] != key["_id"]:
+        raise HTTPException(409, "That video belongs to someone else")
+    if video and video.get("complete"):
+        return {"ok": True, "complete": True}
+
+    data = await request.body()  # capped by _LimitedBodyRoute
+    if not data:
+        raise HTTPException(422, "Empty upload")
+
+    if not video:
+        if number != 0:
+            return JSONResponse(
+                status_code=409,
+                content={"detail": "Some parts of the video have not arrived yet", "missing_parts": [0]},
+            )
+        if await db.voyage_photos.find_one({"_id": video_id}, {"_id": 1}):
+            raise HTTPException(409, "That video belongs to someone else")
+        kind = _video_type(data[:16])
+        if not kind:
+            raise HTTPException(415, "Only MP4, MOV or WebM videos are accepted")
+        if not limiter.allow(f"videos:{key['_id']}", VIDEOS_PER_HOUR, 3600):
+            raise HTTPException(429, "Too many videos in an hour")
+        kept = await db.voyage_videos.find({}, {"size": 1}).to_list(length=None)
+        if (
+            len(kept) >= MAX_VIDEOS_TOTAL
+            or sum(item.get("size", 0) for item in kept) >= MAX_VIDEO_STORE_BYTES
+        ):
+            raise HTTPException(507, "Video storage is full")
+        try:
+            await db.voyage_videos.insert_one(
+                {
+                    "_id": video_id,
+                    "key_id": key["_id"],
+                    "type": kind,
+                    "complete": False,
+                    "created_at": int(time.time()),
+                }
+            )
+        except DuplicateKeyError:
+            pass  # the same part arrived twice at once
+
+    await db.voyage_video_chunks.update_one(
+        {"_id": f"{video_id}:{number}"},
+        {"$set": {"video_id": video_id, "n": number, "size": len(data), "data": data}},
+        upsert=True,
+    )
+    return {"ok": True, "complete": False}
+
+
+class VideoDone(BaseModel):
+    parts: int = Field(ge=1, le=MAX_VIDEO_PARTS)
+    w: int = Field(0, ge=0, le=20000)
+    h: int = Field(0, ge=0, le=20000)
+    duration: float = Field(0, ge=0, le=86400, allow_inf_nan=False)
+    poster_id: Optional[str] = Field(None, pattern=ID_PATTERN)
+
+
+@router.post("/videos/{video_id}/finish")
+async def finish_video(
+    video_id: str, payload: VideoDone, key: dict = Depends(crew_only), db=Depends(get_db)
+):
+    """Close a video once all its parts are in. `poster_id` is a photo to show before it plays."""
+    await _ensure_not_frozen(db)
+    video = None
+    if ID_RE.fullmatch(video_id):
+        video = await db.voyage_videos.find_one({"_id": video_id})
+    if video and video["key_id"] != key["_id"]:
+        raise HTTPException(409, "That video belongs to someone else")
+    if video and video.get("complete"):
+        return _video_ref(video)
+
+    parts = []
+    if video:
+        parts = await db.voyage_video_chunks.find(
+            {"video_id": video_id}, {"n": 1, "size": 1}
+        ).to_list(length=None)
+    have = {part["n"]: part["size"] for part in parts}
+    missing = [number for number in range(payload.parts) if number not in have]
+    if missing:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "Some parts of the video have not arrived yet",
+                "missing_parts": missing,
+            },
+        )
+    # Parts beyond the count belong to an earlier, longer attempt under the same id.
+    await db.voyage_video_chunks.delete_many({"video_id": video_id, "n": {"$gte": payload.parts}})
+
+    poster = None
+    if payload.poster_id and await db.voyage_photos.find_one(
+        {"_id": payload.poster_id, "key_id": key["_id"]}, {"_id": 1}
+    ):
+        poster = payload.poster_id
+    sizes = [have[number] for number in range(payload.parts)]
+    done = {
+        "complete": True,
+        "sizes": sizes,
+        "size": sum(sizes),
+        "w": payload.w,
+        "h": payload.h,
+        "dur": round(payload.duration, 1),
+        "poster": poster,
+    }
+    await db.voyage_videos.update_one({"_id": video_id}, {"$set": done})
+    return _video_ref({**video, **done})
 
 
 # --------------------------------------------------------------------------- public
+
+
+@router.get("/videos/{video_id}")
+async def get_video(video_id: str, request: Request, db=Depends(get_db)):
+    """A video, whole or the byte range asked for (phones only play what can be ranged)."""
+    video = None
+    if ID_RE.fullmatch(video_id):
+        video = await db.voyage_videos.find_one({"_id": video_id, "complete": True})
+    if not video:
+        raise HTTPException(404, "No such video")
+
+    size, sizes = video["size"], video["sizes"]
+    start, end, status = 0, size - 1, 200
+    asked = re.fullmatch(r"bytes=(\d*)-(\d*)", request.headers.get("range", "").strip())
+    if asked and (asked[1] or asked[2]):
+        if asked[1]:
+            start = int(asked[1])
+            end = min(int(asked[2]), size - 1) if asked[2] else size - 1
+        else:
+            start = max(0, size - int(asked[2]))
+        if start > end or start >= size:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+        status = 206
+
+    async def body():
+        offset = 0
+        for number, part_size in enumerate(sizes):
+            if offset > end:
+                break
+            if offset + part_size > start:
+                part = await db.voyage_video_chunks.find_one(
+                    {"_id": f"{video_id}:{number}"}, {"data": 1}
+                )
+                if not part:
+                    return
+                yield bytes(part["data"])[max(0, start - offset) : end - offset + 1]
+            offset += part_size
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(end - start + 1),
+        # A day, not for ever: a video that is deleted should disappear.
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if status == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return StreamingResponse(
+        body(), status_code=status, media_type=VIDEO_TYPES[video["type"]], headers=headers
+    )
 
 
 @router.get("/photos/{photo_id}")
@@ -599,9 +904,14 @@ async def get_photo(photo_id: str, size: str = "full", db=Depends(get_db)):
     field = "thumb" if size == "thumb" else "data"
     doc = None
     if ID_RE.fullmatch(photo_id):
-        doc = await db.voyage_photos.find_one({"_id": photo_id}, {field: 1})
+        # `size=max` gives the largest version kept, which is the usual one for
+        # a photo that was not sent at full quality.
+        wanted = {"max": 1, "data": 1} if size == "max" else {field: 1}
+        doc = await db.voyage_photos.find_one({"_id": photo_id}, wanted)
     if not doc:
         raise HTTPException(404, "No such photo")
+    if size == "max" and doc.get("max"):
+        field = "max"
     return Response(
         content=bytes(doc[field]),
         media_type="image/jpeg",
@@ -1265,18 +1575,11 @@ async def set_freeze(payload: FreezeIn, _: dict = Depends(require_admin), db=Dep
 
 @router.delete("/admin/entries/{entry_id}")
 async def delete_entry(entry_id: str, _: dict = Depends(require_admin), db=Depends(get_db)):
-    """Remove an entry, its photos and the position it brought with it."""
+    """Remove an entry, its photos and videos, and the position it brought with it."""
     entry = await db.voyage_entries.find_one({"_id": entry_id})
     if not entry:
         raise HTTPException(404, "No such entry")
-    photo_ids = [photo["id"] for photo in entry.get("photos", [])]
-    if photo_ids:
-        await db.voyage_photos.delete_many({"_id": {"$in": photo_ids}})
-    await db.voyage_positions.delete_many(
-        {"key_id": entry.get("key_id"), "t": entry["t"], "src": "entry"}
-    )
-    await db.voyage_entries.delete_one({"_id": entry_id})
-    _changed()
+    await _remove_entry(db, entry)
     return {"ok": True}
 
 

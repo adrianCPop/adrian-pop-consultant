@@ -22,11 +22,20 @@ export interface VoyageSettings {
   planned_route: LatLon[];
 }
 
+/** A photo of an entry, or a video when `kind` says so. */
 export interface VoyagePhotoRef {
   id: string;
   w: number;
   h: number;
+  kind?: "video";
+  /** A photo that was sent at full quality: a larger version can be opened. */
+  max?: boolean;
+  /** A video's length in seconds, and the photo shown before it plays. */
+  dur?: number;
+  poster?: string | null;
 }
+
+export type PhotoQuality = "low" | "max";
 
 /** The languages a saved log entry is translated into. */
 export type LogLanguage = "en" | "ro" | "de" | "da";
@@ -168,8 +177,18 @@ const json = (method: string, body: unknown, headers: Record<string, string> = {
 
 const bearer = (secret: string) => ({ Authorization: `Bearer ${secret}` });
 
-export const photoUrl = (id: string, size: "thumb" | "full" = "full") =>
-  `${BASE}/photos/${id}${size === "thumb" ? "?size=thumb" : ""}`;
+export const photoUrl = (id: string, size: "thumb" | "full" | "max" = "full") =>
+  `${BASE}/photos/${id}${size === "full" ? "" : `?size=${size}`}`;
+
+export const videoUrl = (id: string) => `${BASE}/videos/${id}`;
+
+/** The small picture that stands for a photo or a video; null for a video without one. */
+export const thumbUrl = (ref: VoyagePhotoRef) =>
+  ref.kind === "video" ? (ref.poster ? photoUrl(ref.poster, "thumb") : null) : photoUrl(ref.id, "thumb");
+
+/** A video goes up in parts of this size, so a dropped connection costs only one. */
+export const VIDEO_PART_BYTES = 2 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 
 // ---- public
 
@@ -197,9 +216,37 @@ export const fetchMe = (key: string) =>
 export const sendEntry = (key: string, entry: EntryPayload) =>
   request<{ ok: true; id: string }>("/entries", json("POST", entry, bearer(key)));
 
-export const uploadPhoto = (key: string, id: string, blob: Blob) =>
+/** One of this person's own entries, as the server has it. */
+export interface MyEntry {
+  id: string;
+  time: string;
+  title: string;
+  body: string;
+  photos: VoyagePhotoRef[];
+}
+
+export const fetchMyEntries = (key: string) =>
+  request<{ entries: MyEntry[] }>("/entries/mine", { headers: bearer(key) });
+
+export const deleteMyEntry = (key: string, id: string) =>
+  request<{ ok: true }>(`/entries/${id}`, { method: "DELETE", headers: bearer(key) });
+
+export const uploadVideoPart = (key: string, id: string, part: number, blob: Blob) =>
+  request<{ ok: true; complete: boolean }>(
+    `/videos/${id}/parts/${part}`,
+    { method: "PUT", headers: { "Content-Type": "application/octet-stream", ...bearer(key) }, body: blob },
+    180_000
+  );
+
+export const finishVideo = (
+  key: string,
+  id: string,
+  done: { parts: number; w: number; h: number; duration: number; poster_id: string | null }
+) => request<VoyagePhotoRef>(`/videos/${id}/finish`, json("POST", done, bearer(key)), 60_000);
+
+export const uploadPhoto = (key: string, id: string, blob: Blob, quality: PhotoQuality = "low") =>
   request<VoyagePhotoRef>(
-    `/photos/${id}`,
+    `/photos/${id}${quality === "max" ? "?quality=max" : ""}`,
     { method: "PUT", headers: { "Content-Type": blob.type || "image/jpeg", ...bearer(key) }, body: blob },
     180_000
   );

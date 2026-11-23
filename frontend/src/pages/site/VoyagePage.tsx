@@ -22,6 +22,7 @@ import {
 import SeaControls, { type SeaState } from "@/components/voyage/SeaControls";
 import { forgetSeaSpot } from "@/components/voyage/seaLayer";
 import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
+import MediaCarousel, { type MediaLabels } from "@/components/voyage/MediaCarousel";
 import VoyageMap, { type MapView, type VoyageMapPin } from "@/components/voyage/VoyageMap";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -41,7 +42,7 @@ import {
   ApiError,
   fetchSea,
   fetchVoyage,
-  photoUrl,
+  thumbUrl,
   type LogLanguage,
   type VoyageData,
   type VoyageEntry,
@@ -231,9 +232,8 @@ const VoyagePage = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ id: string; nonce: number } | null>(null);
   const [fitNonce, setFitNonce] = useState(0);
-  const [lightbox, setLightbox] = useState<{ photo: VoyagePhotoRef; entry: VoyageEntry } | null>(
-    null
-  );
+  /** An entry's photos and videos shown large, starting from the one that was pressed. */
+  const [lightbox, setLightbox] = useState<{ entry: VoyageEntry; index: number } | null>(null);
   // The forecasts laid over the map (waves, wind). Each is fetched the first time
   // it is chosen. The moment looked at is kept as a time, not as a step, so that
   // it stays put when the other forecast is chosen or a newer one arrives.
@@ -802,6 +802,15 @@ const VoyagePage = () => {
     texts.language,
   ].join(":");
 
+  const mediaLabels: MediaLabels = {
+    previous: t("public.media.previous"),
+    next: t("public.media.next"),
+    video: t("public.media.video"),
+    fullQuality: t("public.media.fullQuality"),
+    counter: (index, total) => t("public.media.counter", { index, total }),
+    open: (index, total) => t("public.entry.openPhoto", { index, total }),
+  };
+
   let statusLine: ReactNode;
   if (status === "planned") {
     statusLine = departure ? (
@@ -966,9 +975,9 @@ const VoyagePage = () => {
 
         {selectedEntry ? (
           <div className="absolute bottom-8 left-3 right-14 z-[1001] flex gap-3 rounded-xl border border-border/80 bg-background/92 p-3 shadow-soft backdrop-blur-md sm:bottom-3 sm:right-auto sm:w-[23rem]">
-            {selectedEntry.photos[0] ? (
+            {selectedEntry.photos[0] && thumbUrl(selectedEntry.photos[0]) ? (
               <img
-                src={photoUrl(selectedEntry.photos[0].id, "thumb")}
+                src={thumbUrl(selectedEntry.photos[0]) ?? undefined}
                 alt=""
                 className="h-[72px] w-[72px] shrink-0 rounded-lg object-cover"
               />
@@ -1367,27 +1376,15 @@ const VoyagePage = () => {
                     ) : null}
 
                     {entry.photos.length > 0 ? (
-                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {entry.photos.map((photo, index) => (
-                          <button
-                            key={photo.id}
-                            type="button"
-                            onClick={() => setLightbox({ photo, entry })}
-                            aria-label={t("public.entry.openPhoto", {
-                              index: index + 1,
-                              total: entry.photos.length,
-                            })}
-                            className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-border/70 bg-secondary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <img
-                              src={photoUrl(photo.id, "thumb")}
-                              alt=""
-                              loading="lazy"
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                          </button>
-                        ))}
-                      </div>
+                      <MediaCarousel
+                        key={entry.photos.map((photo) => photo.id).join(" ")}
+                        items={entry.photos}
+                        labels={mediaLabels}
+                        onOpen={(index) => setLightbox({ entry, index })}
+                        mediaClassName="aspect-[4/3] object-cover"
+                        lazy
+                        className="mt-4 rounded-xl border border-border/70"
+                      />
                     ) : null}
 
                     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
@@ -1516,44 +1513,14 @@ const VoyagePage = () => {
                 className="min-h-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]"
               >
                 {shown.photo ? (
-                  <div className="bg-black">
-                    <img
-                      key={shown.photo.id}
-                      src={photoUrl(shown.photo.id)}
-                      alt=""
-                      width={shown.photo.w}
-                      height={shown.photo.h}
-                      className="max-h-[44vh] w-full object-contain"
-                    />
-                    {shown.entry.photos.length > 1 ? (
-                      <div className="flex gap-2 overflow-x-auto px-3 py-2.5 [scrollbar-color:hsl(var(--border))_transparent] [scrollbar-width:thin]">
-                        {shown.entry.photos.map((photo, index) => (
-                          <button
-                            key={photo.id}
-                            type="button"
-                            onClick={() => openedEntry && setOpened({ id: openedEntry.id, photo: index })}
-                            aria-label={t("public.entry.showPhoto", {
-                              index: index + 1,
-                              total: shown.entry.photos.length,
-                            })}
-                            aria-pressed={photo.id === shown.photo.id}
-                            className={cn(
-                              "h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              photo.id === shown.photo.id
-                                ? "border-primary"
-                                : "border-transparent opacity-60 hover:opacity-100"
-                            )}
-                          >
-                            <img
-                              src={photoUrl(photo.id, "thumb")}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
+                  <MediaCarousel
+                    items={shown.entry.photos}
+                    labels={mediaLabels}
+                    index={shown.entry.photos.findIndex((photo) => photo.id === shown.photo?.id)}
+                    onIndex={(index) => openedEntry && setOpened({ id: openedEntry.id, photo: index })}
+                    mediaClassName="max-h-[44vh] object-contain"
+                    fullQuality
+                  />
                 ) : null}
 
                 <div className="px-5 py-5 sm:px-6">
@@ -1664,12 +1631,13 @@ const VoyagePage = () => {
         >
           {lightbox ? (
             <>
-              <img
-                src={photoUrl(lightbox.photo.id)}
-                alt=""
-                width={lightbox.photo.w}
-                height={lightbox.photo.h}
-                className="max-h-[75vh] w-full bg-black object-contain"
+              <MediaCarousel
+                key={lightbox.entry.id}
+                items={lightbox.entry.photos}
+                labels={mediaLabels}
+                startAt={lightbox.index}
+                mediaClassName="max-h-[75vh] object-contain"
+                fullQuality
               />
               <div className="px-5 py-4">
                 <DialogTitle className="font-heading text-base font-semibold">

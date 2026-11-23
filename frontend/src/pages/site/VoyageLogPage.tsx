@@ -3,12 +3,14 @@ import {
   AlertTriangle,
   Check,
   Clock,
+  Film,
   ImagePlus,
   KeyRound,
   Loader2,
   MapPin,
   Navigation,
   PauseCircle,
+  Pencil,
   Smartphone,
   Trash2,
   Wifi,
@@ -25,7 +27,17 @@ import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
 import { CREW_LANGUAGES } from "@/lib/voyageI18n";
 import { useCrewOnlyPage } from "@/lib/useCrewOnlyPage";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
-import { ApiError, fetchMe, type DevicePosition } from "@/lib/voyageApi";
+import {
+  ApiError,
+  deleteMyEntry,
+  fetchMe,
+  fetchMyEntries,
+  MAX_VIDEO_BYTES,
+  thumbUrl,
+  type DevicePosition,
+  type MyEntry,
+  type PhotoQuality,
+} from "@/lib/voyageApi";
 import {
   addItem,
   listItems,
@@ -33,6 +45,8 @@ import {
   removeItem,
   storageIsDurable,
   syncOutbox,
+  videoProgress,
+  type NewPhoto,
   type OutboxItem,
 } from "@/lib/voyageOutbox";
 import { cn } from "@/lib/utils";
@@ -46,9 +60,15 @@ import { cn } from "@/lib/utils";
 const KEY_STORE = "voyage-log-key";
 const NAME_STORE = "voyage-log-name";
 const GPS_STORE = "voyage-log-gps";
+const QUALITY_STORE = "voyage-log-quality";
 
-const MAX_EDGE_PX = 1600;
-const JPEG_QUALITY = 0.8;
+/** Low is for the satellite link; max is close to what the camera took. */
+const PHOTO_SIZES: Record<PhotoQuality, { edge: number; jpeg: number }> = {
+  low: { edge: 1600, jpeg: 0.8 },
+  max: { edge: 3840, jpeg: 0.92 },
+};
+const POSTER_EDGE_PX = 1280;
+const VIDEO_LIMIT = `${Math.round(MAX_VIDEO_BYTES / (1024 * 1024))} MB`;
 const MAX_PHOTOS = 12;
 /**
  * A browser position coarser than this comes from Wi-Fi or the network, not from
@@ -58,12 +78,19 @@ const GPS_ACCURACY_M = 50;
 const GPS_MAX_AGE_MS = 5 * 60_000;
 const CHECK_EVERY_MS = 30_000;
 
+/** A photo or a video of the entry being written. */
 interface DraftPhoto {
   id: string;
-  blob: Blob;
-  url: string;
+  kind: "photo" | "video";
+  /** Null for one the logbook already has (an entry being corrected). */
+  blob: Blob | null;
+  /** What to show for it; null for a video no picture could be taken from. */
+  url: string | null;
   originalKb: number;
   compressedKb: number;
+  quality?: PhotoQuality;
+  video?: { w: number; h: number; duration: number };
+  poster?: Blob | null;
 }
 
 interface GpsFix extends DevicePosition {
@@ -101,9 +128,10 @@ const writeStore = (name: string, value: string | null) => {
   }
 };
 
-const shrinkPhoto = async (file: File): Promise<DraftPhoto> => {
+const shrinkPhoto = async (file: File, quality: PhotoQuality): Promise<DraftPhoto> => {
+  const size = PHOTO_SIZES[quality];
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, MAX_EDGE_PX / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, size.edge / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
@@ -111,7 +139,7 @@ const shrinkPhoto = async (file: File): Promise<DraftPhoto> => {
   bitmap.close();
 
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY)
+    canvas.toBlob(resolve, "image/jpeg", size.jpeg)
   );
   if (!blob) {
     throw new Error("Could not read this photo");
@@ -119,12 +147,87 @@ const shrinkPhoto = async (file: File): Promise<DraftPhoto> => {
 
   return {
     id: newId(),
+    kind: "photo",
     blob,
     url: URL.createObjectURL(blob),
     originalKb: file.size / 1024,
     compressedKb: blob.size / 1024,
+    quality,
   };
 };
+
+const isVideoFile = (file: File) =>
+  file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm)$/i.test(file.name);
+
+/**
+ * A video goes as it is. Its size, its length and a picture to show before it
+ * plays are read off the file where this browser can open it; where it cannot
+ * (a format the phone records but this browser does not play), it still goes.
+ */
+const readVideo = async (file: File): Promise<DraftPhoto> => {
+  const draft: DraftPhoto = {
+    id: newId(),
+    kind: "video",
+    blob: file,
+    url: null,
+    originalKb: file.size / 1024,
+    compressedKb: file.size / 1024,
+    video: { w: 0, h: 0, duration: 0 },
+    poster: null,
+  };
+  const address = URL.createObjectURL(file);
+  try {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    const until = (event: string, ms: number) =>
+      new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(() => reject(new Error("slow")), ms);
+        video.addEventListener(event, () => (window.clearTimeout(timer), resolve()), { once: true });
+        video.addEventListener("error", () => (window.clearTimeout(timer), reject(new Error("unreadable"))), {
+          once: true,
+        });
+      });
+    const loaded = until("loadeddata", 8000);
+    video.src = address;
+    await loaded;
+    draft.video = {
+      w: video.videoWidth,
+      h: video.videoHeight,
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+    };
+    // A moment in, where there is usually more to see than in the first frame.
+    const seeked = until("seeked", 4000);
+    video.currentTime = Math.min(1, draft.video.duration / 2);
+    await seeked;
+    const scale = Math.min(1, POSTER_EDGE_PX / Math.max(video.videoWidth, video.videoHeight, 1));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const poster = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.8)
+    );
+    if (poster && canvas.width > 0) {
+      draft.poster = poster;
+      draft.url = URL.createObjectURL(poster);
+    }
+  } catch {
+    // No picture, or no figures: the video is sent all the same.
+  } finally {
+    URL.revokeObjectURL(address);
+  }
+  return draft;
+};
+
+/** Let go of the pictures made for drafts. Those of the logbook's own photos are plain addresses. */
+const releaseDrafts = (drafts: DraftPhoto[]) =>
+  drafts.forEach((draft) => {
+    if (draft.blob && draft.url) {
+      URL.revokeObjectURL(draft.url);
+    }
+  });
 
 const isStandalone = () =>
   window.matchMedia("(display-mode: standalone)").matches ||
@@ -147,6 +250,17 @@ const VoyageLogPage = () => {
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const [shrinking, setShrinking] = useState(false);
 
+  const [quality, setQuality] = useState<PhotoQuality>(() =>
+    readStore(QUALITY_STORE) === "max" ? "max" : "low"
+  );
+  /** The entry of the logbook being corrected, when the form holds one. */
+  const [editing, setEditing] = useState<{ id: string; time: string } | null>(null);
+  /** This person's entries as the server has them; null until it has answered. */
+  const [mine, setMine] = useState<MyEntry[] | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** How far the videos of a waiting entry have got, by the entry's id. */
+  const [progress, setProgress] = useState<Record<string, number>>({});
+
   const [items, setItems] = useState<OutboxItem[]>([]);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [durable, setDurable] = useState(true);
@@ -159,12 +273,33 @@ const VoyageLogPage = () => {
   useCrewOnlyPage();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const photosRef = useRef<DraftPhoto[]>([]);
   photosRef.current = photos;
 
   const refreshItems = useCallback(async () => {
-    setItems(await listItems());
+    const list = await listItems();
+    setItems(list);
+    const shares: Record<string, number> = {};
+    for (const item of list) {
+      const share = item.status === "waiting" ? await videoProgress(item.id) : null;
+      if (share !== null) {
+        shares[item.id] = share;
+      }
+    }
+    setProgress(shares);
   }, []);
+
+  const refreshMine = useCallback(async () => {
+    if (!key) {
+      return;
+    }
+    try {
+      setMine((await fetchMyEntries(key)).entries);
+    } catch {
+      // No connection, or the link was refused: the list stays as it was.
+    }
+  }, [key]);
 
   /** The server refused this key: go back to the one this device already had, if it is another. */
   const keyRefused = useCallback(() => {
@@ -191,6 +326,7 @@ const VoyageLogPage = () => {
       setFrozen(me.frozen);
       setLink("online");
       if (me.frozen) {
+        void refreshMine();
         return;
       }
     } catch (error) {
@@ -215,7 +351,8 @@ const VoyageLogPage = () => {
     } else if (outcome !== "busy") {
       setServerTrouble(outcome === "problems");
     }
-  }, [key, refreshItems, keyRefused]);
+    void refreshMine();
+  }, [key, refreshItems, refreshMine, keyRefused]);
 
   // Remember the key on this device and keep checking for a connection.
   useEffect(() => {
@@ -263,7 +400,7 @@ const VoyageLogPage = () => {
   useEffect(() => {
     void refreshItems();
     void storageIsDurable().then(setDurable);
-    return () => photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
+    return () => releaseDrafts(photosRef.current);
   }, [refreshItems]);
 
   // Home-screen install: this page gets its own manifest, icon and offline copy.
@@ -398,8 +535,16 @@ const VoyageLogPage = () => {
     setShrinking(true);
     const shrunk: DraftPhoto[] = [];
     for (const file of files) {
+      if (isVideoFile(file)) {
+        if (file.size > MAX_VIDEO_BYTES) {
+          toast.error(t("log.videos.tooLarge", { file: file.name, size: VIDEO_LIMIT }));
+        } else {
+          shrunk.push(await readVideo(file));
+        }
+        continue;
+      }
       try {
-        shrunk.push(await shrinkPhoto(file));
+        shrunk.push(await shrinkPhoto(file, quality));
       } catch {
         toast.error(t("log.photos.unreadable", { file: file.name }));
       }
@@ -410,9 +555,70 @@ const VoyageLogPage = () => {
 
   const removePhoto = (id: string) => {
     setPhotos((current) => {
-      current.filter((photo) => photo.id === id).forEach((photo) => URL.revokeObjectURL(photo.url));
+      releaseDrafts(current.filter((photo) => photo.id === id));
       return current.filter((photo) => photo.id !== id);
     });
+  };
+
+  const chooseQuality = (value: PhotoQuality) => {
+    setQuality(value);
+    writeStore(QUALITY_STORE, value);
+  };
+
+  const clearForm = () => {
+    releaseDrafts(photosRef.current);
+    setTitle("");
+    setBody("");
+    setPhotos([]);
+    setEditing(null);
+  };
+
+  /** Put one of the logbook's entries into the form, to correct it. */
+  const startEdit = (entry: MyEntry) => {
+    releaseDrafts(photosRef.current);
+    setEditing({ id: entry.id, time: entry.time });
+    setTitle(entry.title);
+    setBody(entry.body);
+    setPhotos(
+      entry.photos.map((ref) => ({
+        id: ref.id,
+        kind: ref.kind === "video" ? "video" : "photo",
+        blob: null,
+        url: thumbUrl(ref),
+        originalKb: 0,
+        compressedKb: 0,
+      }))
+    );
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const deleteMine = async (entry: MyEntry) => {
+    if (!key) {
+      return;
+    }
+    const question = entry.title
+      ? t("log.mine.deleteConfirm", { title: entry.title })
+      : t("log.mine.deleteConfirmUntitled");
+    if (!window.confirm(question)) {
+      return;
+    }
+    setDeletingId(entry.id);
+    try {
+      await deleteMyEntry(key, entry.id);
+      // The device's own record of it goes too, so it is not sent again.
+      await removeItem(entry.id);
+      if (editing?.id === entry.id) {
+        clearForm();
+      }
+      toast.success(t("log.mine.deleted"));
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? texts.server(error.message) : t("log.mine.notDeleted")
+      );
+    }
+    setDeletingId(null);
+    await refreshItems();
+    await refreshMine();
   };
 
   const saveEntry = async (event: FormEvent) => {
@@ -422,31 +628,58 @@ const VoyageLogPage = () => {
       return;
     }
 
+    // Only what the logbook does not have yet is kept on the device to be sent.
+    const records: NewPhoto[] = [];
+    for (const photo of photos) {
+      if (!photo.blob) {
+        continue;
+      }
+      if (photo.kind === "video") {
+        const posterId = photo.poster ? newId() : null;
+        if (photo.poster && posterId) {
+          records.push({ id: posterId, blob: photo.poster, poster: true });
+        }
+        records.push({
+          id: photo.id,
+          blob: photo.blob,
+          video: { ...(photo.video ?? { w: 0, h: 0, duration: 0 }), posterId },
+        });
+      } else {
+        records.push({ id: photo.id, blob: photo.blob, quality: photo.quality });
+      }
+    }
+
     try {
+      if (editing) {
+        // An earlier record of this entry on the device is replaced, not added to.
+        await removeItem(editing.id);
+      }
       await addItem(
         {
-          id: newId(),
+          id: editing?.id ?? newId(),
           kind: "entry",
-          createdAt: new Date().toISOString(),
+          // A correction keeps the time the entry was written, and its position.
+          createdAt: editing?.time ?? new Date().toISOString(),
           title: title.trim(),
           body: body.trim(),
-          position: usableGps(),
+          position: editing ? null : usableGps(),
           photoIds: photos.map((photo) => photo.id),
           status: "waiting",
+          ...(editing ? { edit: true } : {}),
         },
-        photos.map((photo) => ({ id: photo.id, blob: photo.blob }))
+        records
       );
     } catch {
       toast.error(t("log.entry.notSaved"));
       return;
     }
 
-    photos.forEach((photo) => URL.revokeObjectURL(photo.url));
-    setTitle("");
-    setBody("");
-    setPhotos([]);
+    const corrected = editing !== null;
+    clearForm();
     await refreshItems();
-    toast.success(t("log.entry.saved"), { description: t("log.entry.savedDetail") });
+    toast.success(t(corrected ? "log.edit.saved" : "log.entry.saved"), {
+      description: t("log.entry.savedDetail"),
+    });
     void checkAndSend();
   };
 
@@ -633,10 +866,29 @@ const VoyageLogPage = () => {
 
         </div>
 
-        <form onSubmit={saveEntry} className="panel-soft rounded-2xl p-5 sm:p-6 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          <h2 className="font-heading text-lg font-semibold text-foreground">
-            {t("log.entry.new")}
-          </h2>
+        <form
+          ref={formRef}
+          onSubmit={saveEntry}
+          className={cn(
+            "panel-soft scroll-mt-4 rounded-2xl p-5 sm:p-6 lg:col-start-1 lg:row-span-2 lg:row-start-1",
+            editing && "ring-1 ring-primary/70"
+          )}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="font-heading text-lg font-semibold text-foreground">
+              {t(editing ? "log.edit.title" : "log.entry.new")}
+            </h2>
+            {editing ? (
+              <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={clearForm}>
+                {t("log.edit.cancel")}
+              </Button>
+            ) : null}
+          </div>
+          {editing ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("log.edit.note", { time: texts.stamp(editing.time) })}
+            </p>
+          ) : null}
 
           <div className="mt-4 rounded-xl border border-border/70 bg-secondary/40 p-3">
             <div className="flex items-start gap-3">
@@ -708,19 +960,63 @@ const VoyageLogPage = () => {
 
           <div className="mt-4">
             <p className="text-xs font-semibold uppercase tracking-[0.1em]">{t("log.photos.title")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("log.photos.note")}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span id="photo-quality" className="text-xs font-medium text-muted-foreground">
+                {t("log.quality.title")}
+              </span>
+              <div
+                role="group"
+                aria-labelledby="photo-quality"
+                className="inline-flex items-center rounded-lg border border-border/80 bg-secondary/40 p-0.5"
+              >
+                {(["low", "max"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={quality === value}
+                    onClick={() => chooseQuality(value)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      quality === value
+                        ? "bg-primary/20 text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {t(value === "max" ? "log.quality.max" : "log.quality.low")}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {t(quality === "max" ? "log.quality.maxNote" : "log.photos.note")}{" "}
+              {t("log.videos.note", { size: VIDEO_LIMIT })}
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
               {photos.map((photo) => (
                 <div
                   key={photo.id}
-                  className="relative aspect-square overflow-hidden rounded-xl border border-border/70"
+                  className="relative aspect-square overflow-hidden rounded-xl border border-border/70 bg-secondary/60"
                 >
-                  <img src={photo.url} alt="" className="h-full w-full object-cover" />
-                  <span className="absolute inset-x-0 bottom-0 bg-black/65 px-1.5 py-1 text-center text-[0.62rem] tabular-nums text-white">
-                    {kb(photo.originalKb)} → {kb(photo.compressedKb)}
-                  </span>
+                  {photo.url ? (
+                    <img src={photo.url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+                      <Film className="h-7 w-7" />
+                    </span>
+                  )}
+                  {photo.kind === "video" ? (
+                    <span className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-white">
+                      <Film className="h-3 w-3" />
+                      {t("log.videos.badge")}
+                    </span>
+                  ) : null}
+                  {photo.blob ? (
+                    <span className="absolute inset-x-0 bottom-0 bg-black/65 px-1.5 py-1 text-center text-[0.62rem] tabular-nums text-white">
+                      {photo.kind === "video"
+                        ? kb(photo.originalKb)
+                        : `${kb(photo.originalKb)} → ${kb(photo.compressedKb)}`}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => removePhoto(photo.id)}
@@ -750,7 +1046,7 @@ const VoyageLogPage = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               className="sr-only"
               onChange={(event) => void pickPhotos(event)}
@@ -764,13 +1060,13 @@ const VoyageLogPage = () => {
             disabled={shrinking}
             className="mt-6 h-12 w-full rounded-xl text-sm font-semibold"
           >
-            {t("log.entry.save")}
+            {t(editing ? "log.edit.save" : "log.entry.save")}
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={() => void sendPositionOnly()}
-            disabled={!goodGps}
+            disabled={!goodGps || editing !== null}
             className="mt-3 h-11 w-full rounded-xl text-sm font-semibold"
           >
             <Navigation className="mr-2 h-4 w-4" />
@@ -829,8 +1125,13 @@ const VoyageLogPage = () => {
                             ? ` · ${t("common.photos", { count: item.photoIds.length })}`
                             : ""}
                           {" · "}
+                          {item.edit ? `${t("log.outbox.correction")} · ` : ""}
                           {sending
-                            ? t("log.outbox.sending")
+                            ? progress[item.id] !== undefined
+                              ? t("log.outbox.videoProgress", {
+                                  percent: Math.round(progress[item.id] * 100),
+                                })
+                              : t("log.outbox.sending")
                             : item.status === "sent"
                               ? t("log.outbox.sent")
                               : item.status === "failed"
@@ -851,6 +1152,65 @@ const VoyageLogPage = () => {
                           <Trash2 className="h-4 w-4" />
                         </button>
                       ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="panel-soft rounded-2xl p-5">
+            <h2 className="font-heading text-lg font-semibold text-foreground">
+              {t("log.mine.title")}
+            </h2>
+            {mine === null ? (
+              <p className="mt-2 text-sm text-muted-foreground">{t("log.mine.offline")}</p>
+            ) : mine.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">{t("log.mine.empty")}</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-border/60">
+                {mine.map((entry) => {
+                  const pending = items.some(
+                    (item) => item.id === entry.id && item.status === "waiting"
+                  );
+                  const busy = deletingId === entry.id;
+
+                  return (
+                    <li key={entry.id} className="flex items-start gap-2 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {entry.title || entry.body.slice(0, 60) || t("log.outbox.photosOnly")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {texts.stamp(entry.time)}
+                          {entry.photos.length > 0
+                            ? ` · ${t("common.photos", { count: entry.photos.length })}`
+                            : ""}
+                        </p>
+                        {pending ? (
+                          <p className="mt-0.5 text-xs text-primary">{t("log.mine.waiting")}</p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(entry)}
+                        disabled={pending || busy || frozen}
+                        aria-label={`${t("log.mine.edit")}: ${entry.title || t("common.logEntry")}`}
+                        title={t("log.mine.edit")}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteMine(entry)}
+                        disabled={pending || busy || frozen}
+                        aria-label={`${t("log.mine.delete")}: ${entry.title || t("common.logEntry")}`}
+                        title={t("log.mine.delete")}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40"
+                      >
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
                     </li>
                   );
                 })}

@@ -288,3 +288,28 @@ The public page has four languages (EN, RO, DE, DK in the switch; Danish is `da`
 in the code). Entries are shown in the page's language where a version was
 saved, and otherwise in the original, marked as such. The crew's log and the
 shore controls have English and Romanian only.
+
+### Correcting entries, photo quality, videos
+
+- **Own entries.** The log page lists what its link has in the logbook
+  (`GET /api/voyage/entries/mine`). Edit puts an entry back in the form and
+  sends it again under the same id through the outbox, so it also works with
+  the dish off; the entry keeps its time and position, and photos or videos
+  taken off it are deleted. Delete (`DELETE /api/voyage/entries/{id}`) needs a
+  connection. A link can only touch its own entries; the shore controls can
+  still delete any.
+- **Photo quality.** "Low" (the default) shrinks to 1600 px on the device, as
+  before. "Max" sends up to 3840 px and the server keeps that size too
+  (`?quality=max` on upload, `?size=max` to read it). The page always shows the
+  1600 px version; the large one opens from "Full quality".
+- **Videos.** MP4, MOV or WebM, up to 200 MB, stored as sent: the server has no
+  encoder, so it only checks how the file begins. They go up in 2 MB parts
+  (`PUT /api/voyage/videos/{id}/parts/{n}`, then `POST .../finish`), and an
+  interrupted upload goes on from the last part. They are served with byte
+  ranges, which phones need to play them. A picture taken from the video on the
+  device is shown before it plays. A video recorded in a format the reader's
+  browser cannot play (HEVC outside Safari) will not play there.
+- **Carousel.** An entry's photos and videos are shown one at a time with
+  previous and next (or a swipe), in the logbook, in the entry opened from the
+  map and in the large view.
+
