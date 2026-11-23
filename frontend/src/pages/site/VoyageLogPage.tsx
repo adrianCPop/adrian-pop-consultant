@@ -24,7 +24,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import VoyageLanguageSwitch from "@/components/voyage/VoyageLanguageSwitch";
-import { CREW_LANGUAGES } from "@/lib/voyageI18n";
 import { useCrewOnlyPage } from "@/lib/useCrewOnlyPage";
 import { useVoyageTexts } from "@/lib/useVoyageTexts";
 import {
@@ -726,7 +725,7 @@ const VoyageLogPage = () => {
           <p className="pt-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
             {t("log.crewOnly")}
           </p>
-          <VoyageLanguageSwitch languages={CREW_LANGUAGES} />
+          <VoyageLanguageSwitch />
         </div>
         <h1 className="mt-2 font-heading text-3xl font-semibold">{t("log.title")}</h1>
 
@@ -805,7 +804,7 @@ const VoyageLogPage = () => {
           </p>
         </div>
         <div className="flex flex-col items-end gap-3">
-          <VoyageLanguageSwitch languages={CREW_LANGUAGES} />
+          <VoyageLanguageSwitch />
           <button
             type="button"
             onClick={forgetLink}
