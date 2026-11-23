@@ -1,6 +1,6 @@
 /**
  * Every piece of text on the voyage pages, in English and in Romanian, and the
- * public page also in German and Danish.
+ * public page and the crew's log also in German and Danish.
  *
  * `{name}` is filled in by the page. Where the wording depends on a number, the
  * message gives its forms and the number is passed as `count`: English has two
@@ -842,8 +842,9 @@ const RO: Record<MessageKey, Message> = {
 };
 
 /**
- * German and Danish, for the public page. The crew's log and the shore controls
- * are not translated: their texts stay in English here.
+ * German and Danish, for the public page and the crew's log. The shore controls
+ * are not translated: their texts stay in English here, and so does what the
+ * server says when it refuses something.
  */
 const DE: Record<MessageKey, Message> = {
   ...EN,
@@ -1019,6 +1020,126 @@ const DE: Record<MessageKey, Message> = {
     "Positionen kommen an, wenn die Satellitenantenne an Bord eingeschaltet ist. Eine Lücke von einem Tag oder mehr ist normal und bedeutet fast immer, dass die Antenne aus ist oder das Telefon, das die Strecke aufzeichnet, neu gestartet werden muss.",
   "public.quiet.strong": "Eine stille Karte ist kein Notsignal.",
   "public.boat": "Das Boot",
+  // ---- the crew's log
+  "log.crewOnly": "Nur für die Crew",
+  "log.title": "Logbuch",
+  "log.link.off": "Dieser Link wurde abgeschaltet",
+  "log.link.open": "Mit deinem persönlichen Link öffnen",
+  "log.link.askNew": "Bitte um einen neuen und füge ihn hier ein.",
+  "log.link.explain":
+    "Jede Person an Bord hat ihren eigenen Link. Öffne ihn oder füge ihn hier ein. Das machst du auf jedem Gerät nur einmal.",
+  "log.link.unsent": {
+    one: "{count} nicht gesendeter Eintrag ist auf diesem Gerät sicher und geht mit dem neuen Link raus.",
+    other:
+      "{count} nicht gesendete Einträge sind auf diesem Gerät sicher und gehen mit dem neuen Link raus.",
+  },
+  "log.link.field": "Persönlicher Link",
+  "log.link.paste": "Füge deinen Link ein",
+  "log.link.submit": "Logbuch öffnen",
+  "log.link.notALink": "Das sieht nicht nach einem persönlichen Link aus",
+  "log.link.sameLink": "Das ist derselbe Link, und er ist abgeschaltet",
+  "log.writingAs": "Du schreibst als {name}.",
+  "log.nameComes": "Dein Name erscheint, sobald der Link geprüft ist.",
+  "log.notYou": "Nicht {name}? Anderen Link verwenden",
+  "log.notYouUnnamed": "Nicht du? Anderen Link verwenden",
+  "log.connection.checking": "Verbindung wird geprüft",
+  "log.connection.moment": "Einen Moment.",
+  "log.connection.paused": "Das Logbuch ist angehalten",
+  "log.connection.pausedDetail":
+    "Der Kontakt an Land hat das Senden angehalten. Schreib weiter; die Einträge warten hier sicher.",
+  "log.connection.sending": "Wird gesendet",
+  "log.connection.connected": "Verbunden",
+  "log.connection.trouble":
+    "Der Server konnte noch nicht alles annehmen. Der Rest bleibt hier und wird erneut versucht.",
+  "log.connection.waiting": "{count} warten auf den Versand.",
+  "log.connection.allSent": "Alles auf diesem Gerät wurde gesendet.",
+  "log.connection.none": "Keine Verbindung",
+  "log.connection.waitingOffline":
+    "{count} warten hier. Sie gehen von selbst raus, sobald die Antenne an ist und diese Seite offen ist.",
+  "log.connection.keepWriting":
+    "Schreib weiter. Einträge werden auf diesem Gerät gespeichert und gesendet, sobald die Antenne an ist.",
+  "log.connection.tryNow": "Jetzt versuchen",
+  "log.notDurable":
+    "Dieser Browser behält Einträge nicht, wenn die Seite geschlossen wird (privates Fenster?). Nimm ein normales Fenster oder bleib auf dieser Seite, bis alles als gesendet angezeigt wird.",
+  "log.entry.new": "Neuer Eintrag",
+  "log.gps.accurate": "Vom GPS dieses Geräts, auf {accuracy} m genau.",
+  "log.gps.fromTrack": "Die Position kommt aus der Spur des Bootes",
+  "log.gps.rough":
+    "Dieses Gerät hat nur eine ungefähre Position, deshalb wird der Eintrag dort gesetzt, wo der Tracker das Boot gesehen hat.",
+  "log.gps.looking": "GPS-Position wird gesucht.",
+  "log.gps.off":
+    "Der Eintrag wird dort gesetzt, wo der Tracker das Boot beim Speichern gesehen hat.",
+  "log.gps.blocked":
+    "Der Standort ist für diese Seite gesperrt. Erlaube ihn in den Einstellungen des Browsers.",
+  "log.gps.unavailable": "Dieses Gerät konnte seine Position nicht finden.",
+  "log.gps.use": "GPS dieses Geräts verwenden (Telefone)",
+  "log.entry.title": "Titel",
+  "log.entry.titleExample": "Fliegende Fische zum Frühstück",
+  "log.entry.body": "Was passiert ist",
+  "log.entry.bodyExample": "Wind, Segel, was du gesehen hast, was kaputtging, was es zu essen gab.",
+  "log.photos.title": "Fotos und Videos",
+  "log.quality.title": "Fotoqualität",
+  "log.quality.low": "Niedrig",
+  "log.quality.max": "Maximal",
+  "log.quality.maxNote":
+    "Fast so gesendet, wie sie aufgenommen wurden, mehrere Megabyte pro Foto: für eine gute Verbindung.",
+  "log.videos.note":
+    "Videos gehen so raus, wie sie sind, bis {size} pro Video, in kleinen Teilen, die dort weitermachen, wo sie aufgehört haben.",
+  "log.videos.tooLarge": "{file} ist größer als {size}",
+  "log.mine.title": "Deine Einträge",
+  "log.mine.empty": "Von dir steht noch nichts im Logbuch.",
+  "log.mine.offline": "Sie erscheinen hier, sobald es eine Verbindung gibt.",
+  "log.mine.edit": "Bearbeiten",
+  "log.mine.delete": "Löschen",
+  "log.mine.deleteConfirm":
+    "„{title}“ mit Fotos und Videos endgültig aus dem Logbuch löschen?",
+  "log.mine.deleteConfirmUntitled":
+    "Diesen Eintrag mit Fotos und Videos endgültig aus dem Logbuch löschen?",
+  "log.mine.deleted": "Aus dem Logbuch gelöscht",
+  "log.mine.notDeleted": "Löschen nicht möglich. Dafür braucht es eine Verbindung.",
+  "log.mine.waiting": "Eine Korrektur wartet auf den Versand",
+  "log.edit.title": "Eintrag bearbeiten",
+  "log.edit.note": "Geschrieben {time}. Zeit und Position bleiben, wie sie waren.",
+  "log.edit.save": "Änderungen speichern",
+  "log.edit.cancel": "Abbrechen",
+  "log.edit.saved": "Änderungen auf diesem Gerät gespeichert",
+  "log.outbox.correction": "Korrektur",
+  "log.photos.note":
+    "Werden vor dem Senden auf diesem Gerät verkleinert, um Satellitendaten zu sparen.",
+  "log.photos.remove": "Foto entfernen",
+  "log.photos.shrinking": "Wird verkleinert",
+  "log.photos.add": "Hinzufügen",
+  "log.photos.addLabel": "Fotos hinzufügen",
+  "log.photos.unreadable": "{file} konnte nicht gelesen werden",
+  "log.entry.save": "Eintrag speichern",
+  "log.entry.empty": "Schreib erst etwas oder füge ein Foto hinzu",
+  "log.entry.notSaved":
+    "Speichern auf diesem Gerät nicht möglich. Vielleicht ist der Speicher voll.",
+  "log.entry.saved": "Auf diesem Gerät gespeichert",
+  "log.entry.savedDetail": "Es wird gesendet, sobald es eine Verbindung gibt.",
+  "log.position.send": "Nur meine Position senden",
+  "log.position.needsGps": "Braucht das GPS dieses Geräts. Schalte es oben ein.",
+  "log.position.none": "Gerade keine frische GPS-Position",
+  "log.position.saved": "Position gespeichert",
+  "log.outbox.title": "Postausgang",
+  "log.outbox.empty":
+    "Noch nichts. Was du speicherst, steht hier, bis es gesendet wurde.",
+  "log.outbox.positionOnly": "Nur Position",
+  "log.outbox.photosOnly": "Fotos",
+  "log.outbox.sending": "wird gesendet",
+  "log.outbox.sent": "gesendet",
+  "log.outbox.failed": "nicht gesendet",
+  "log.outbox.waiting": "wartet",
+  "log.outbox.discard": "Diesen Eintrag verwerfen",
+  "log.outbox.discardConfirm": "Diesen Eintrag verwerfen? Er wurde nicht gesendet.",
+  "log.install.title": "Auf den Home-Bildschirm legen",
+  "log.install.body":
+    "iPhone oder iPad: in Safari auf Teilen tippen, dann „Zum Home-Bildschirm“. Android: das Browsermenü öffnen, dann „Zum Startbildschirm hinzufügen“. Mach das, während diese Seite mit deinem Link offen ist, und öffne das neue Symbol einmal, solange du noch verbunden bist. Danach öffnet das Symbol das Logbuch auch bei ausgeschalteter Antenne.",
+  "outbox.onePhoto": "Ein Foto konnte nicht gesendet werden",
+  "outbox.oneVideo": "Ein Video konnte nicht gesendet werden",
+  "outbox.notAccepted": "Nicht angenommen: {reason}",
+  "outbox.retry": "Server: {message}. Es wird erneut versucht.",
+  "server.answered": "Der Server hat mit {status} geantwortet",
 };
 
 const DA: Record<MessageKey, Message> = {
@@ -1193,6 +1314,122 @@ const DA: Record<MessageKey, Message> = {
     "Positionerne kommer, når satellitantennen om bord er tændt. Et hul på et døgn eller mere er normalt og betyder næsten altid, at antennen er slukket, eller at telefonen, der registrerer sporet, skal genstartes.",
   "public.quiet.strong": "Et stille kort er ikke et nødsignal.",
   "public.boat": "Båden",
+  // ---- the crew's log
+  "log.crewOnly": "Kun for besætningen",
+  "log.title": "Skibets logbog",
+  "log.link.off": "Dette link er slået fra",
+  "log.link.open": "Åbn med dit personlige link",
+  "log.link.askNew": "Bed om et nyt, og indsæt det her.",
+  "log.link.explain":
+    "Hver person om bord har sit eget link. Åbn det, eller indsæt det her. Det gør du kun én gang på hver enhed.",
+  "log.link.unsent": {
+    one: "{count} notat, der ikke er sendt, ligger sikkert på denne enhed og bliver sendt med det nye link.",
+    other:
+      "{count} notater, der ikke er sendt, ligger sikkert på denne enhed og bliver sendt med det nye link.",
+  },
+  "log.link.field": "Personligt link",
+  "log.link.paste": "Indsæt dit link",
+  "log.link.submit": "Åbn logbogen",
+  "log.link.notALink": "Det ligner ikke et personligt link",
+  "log.link.sameLink": "Det er det samme link, og det er slået fra",
+  "log.writingAs": "Du skriver som {name}.",
+  "log.nameComes": "Dit navn vises, når linket er tjekket.",
+  "log.notYou": "Ikke {name}? Brug et andet link",
+  "log.notYouUnnamed": "Ikke dig? Brug et andet link",
+  "log.connection.checking": "Tjekker forbindelsen",
+  "log.connection.moment": "Et øjeblik.",
+  "log.connection.paused": "Logbogen er sat på pause",
+  "log.connection.pausedDetail":
+    "Kontakten i land har sat afsendelsen på pause. Skriv bare videre; notaterne venter sikkert her.",
+  "log.connection.sending": "Sender",
+  "log.connection.connected": "Forbundet",
+  "log.connection.trouble":
+    "Serveren kunne ikke tage imod det hele endnu. Resten bliver her og prøves igen.",
+  "log.connection.waiting": "{count} venter på at blive sendt.",
+  "log.connection.allSent": "Alt på denne enhed er sendt.",
+  "log.connection.none": "Ingen forbindelse",
+  "log.connection.waitingOffline":
+    "{count} venter her. De bliver sendt af sig selv, når antennen er tændt og denne side er åben.",
+  "log.connection.keepWriting":
+    "Skriv videre. Notater gemmes på denne enhed og sendes, når antennen er tændt.",
+  "log.connection.tryNow": "Prøv nu",
+  "log.notDurable":
+    "Denne browser gemmer ikke notater, når siden lukkes (privat vindue?). Brug et almindeligt vindue, eller bliv på siden, til alt står som sendt.",
+  "log.entry.new": "Nyt notat",
+  "log.gps.accurate": "Fra denne enheds GPS, med {accuracy} m nøjagtighed.",
+  "log.gps.fromTrack": "Positionen kommer fra bådens spor",
+  "log.gps.rough":
+    "Denne enhed har kun en omtrentlig position, så notatet placeres der, hvor trackeren siger, båden var.",
+  "log.gps.looking": "Leder efter en GPS-position.",
+  "log.gps.off": "Notatet placeres der, hvor trackeren siger, båden var, da du gemte det.",
+  "log.gps.blocked":
+    "Placering er blokeret for denne side. Tillad den i browserens indstillinger.",
+  "log.gps.unavailable": "Denne enhed kunne ikke finde sin position.",
+  "log.gps.use": "Brug denne enheds GPS (telefoner)",
+  "log.entry.title": "Overskrift",
+  "log.entry.titleExample": "Flyvefisk til morgenmad",
+  "log.entry.body": "Hvad der skete",
+  "log.entry.bodyExample": "Vind, sejl, hvad du så, hvad der gik i stykker, hvad der var til aftensmad.",
+  "log.photos.title": "Fotos og videoer",
+  "log.quality.title": "Fotokvalitet",
+  "log.quality.low": "Lav",
+  "log.quality.max": "Maks.",
+  "log.quality.maxNote":
+    "Sendes næsten, som de blev taget, flere megabyte pr. foto: til når forbindelsen er god.",
+  "log.videos.note":
+    "Videoer sendes, som de er, op til {size} pr. video, i små dele, der fortsætter, hvor de slap.",
+  "log.videos.tooLarge": "{file} er større end {size}",
+  "log.mine.title": "Dine notater",
+  "log.mine.empty": "Du har ikke noget i logbogen endnu.",
+  "log.mine.offline": "De vises her, når der er forbindelse.",
+  "log.mine.edit": "Rediger",
+  "log.mine.delete": "Slet",
+  "log.mine.deleteConfirm":
+    "Slet „{title}“ fra logbogen for altid, med fotos og videoer?",
+  "log.mine.deleteConfirmUntitled":
+    "Slet dette notat fra logbogen for altid, med fotos og videoer?",
+  "log.mine.deleted": "Slettet fra logbogen",
+  "log.mine.notDeleted": "Kunne ikke slette det. Det kræver forbindelse.",
+  "log.mine.waiting": "En rettelse venter på at blive sendt",
+  "log.edit.title": "Rediger notat",
+  "log.edit.note": "Skrevet {time}. Tidspunkt og position bliver, som de var.",
+  "log.edit.save": "Gem ændringer",
+  "log.edit.cancel": "Annuller",
+  "log.edit.saved": "Ændringerne er gemt på denne enhed",
+  "log.outbox.correction": "rettelse",
+  "log.photos.note": "Formindskes på denne enhed før afsendelse for at spare satellitdata.",
+  "log.photos.remove": "Fjern foto",
+  "log.photos.shrinking": "Formindsker",
+  "log.photos.add": "Tilføj",
+  "log.photos.addLabel": "Tilføj fotos",
+  "log.photos.unreadable": "Kunne ikke læse {file}",
+  "log.entry.save": "Gem notat",
+  "log.entry.empty": "Skriv noget, eller tilføj et foto først",
+  "log.entry.notSaved": "Kunne ikke gemme på denne enhed. Lageret er måske fuldt.",
+  "log.entry.saved": "Gemt på denne enhed",
+  "log.entry.savedDetail": "Det sendes, så snart der er forbindelse.",
+  "log.position.send": "Send kun min position",
+  "log.position.needsGps": "Kræver GPS på denne enhed. Slå den til ovenfor.",
+  "log.position.none": "Ingen frisk GPS-position lige nu",
+  "log.position.saved": "Position gemt",
+  "log.outbox.title": "Udbakke",
+  "log.outbox.empty": "Intet endnu. Det, du gemmer, står her, indtil det er sendt.",
+  "log.outbox.positionOnly": "Kun position",
+  "log.outbox.photosOnly": "Fotos",
+  "log.outbox.sending": "sender",
+  "log.outbox.sent": "sendt",
+  "log.outbox.failed": "ikke sendt",
+  "log.outbox.waiting": "venter",
+  "log.outbox.discard": "Kassér dette notat",
+  "log.outbox.discardConfirm": "Kassér dette notat? Det er ikke sendt.",
+  "log.install.title": "Læg den på hjemmeskærmen",
+  "log.install.body":
+    "iPhone eller iPad: tryk på Del i Safari, og vælg „Føj til hjemmeskærm“. Android: åbn browserens menu, og vælg „Føj til startskærm“. Gør det, mens denne side er åben med dit link, og åbn det nye ikon én gang, mens du stadig har forbindelse. Derefter åbner ikonet logbogen, også når antennen er slukket.",
+  "outbox.onePhoto": "Et foto kunne ikke sendes",
+  "outbox.oneVideo": "En video kunne ikke sendes",
+  "outbox.notAccepted": "Ikke accepteret: {reason}",
+  "outbox.retry": "Server: {message}. Det prøves igen.",
+  "server.answered": "Serveren svarede {status}",
 };
 
 export const MESSAGES: Record<"EN" | "RO" | "DE" | "DA", Record<MessageKey, Message>> = {

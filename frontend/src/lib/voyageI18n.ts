@@ -1,6 +1,6 @@
 /**
- * The voyage pages in their languages (the public page in four, the crew's log
- * and the shore controls in English and Romanian): which one a visitor gets, the texts, and
+ * The voyage pages in their languages (the public page and the crew's log in
+ * four, the shore controls in English and Romanian): which one a visitor gets, the texts, and
  * the figures, dates and directions written the way each language writes them.
  * No React here; the pages reach this through `useVoyageTexts`.
  */
@@ -12,10 +12,7 @@ export type VoyageLanguage = "EN" | "RO" | "DE" | "DA";
 /** The languages of the public page. */
 export const LANGUAGES: VoyageLanguage[] = ["EN", "RO", "DE", "DA"];
 
-/**
- * The languages of the crew's log and the shore controls. In German or Danish
- * those two pages read in English.
- */
+/** The languages of the shore controls. In German or Danish that page reads in English. */
 export const CREW_LANGUAGES: VoyageLanguage[] = ["EN", "RO"];
 
 /**
@@ -150,12 +147,13 @@ const messageParts = (language: VoyageLanguage, key: MessageKey, params: Params)
 
 /** What the server said, in the page's language. Unknown sentences pass through. */
 export const serverText = (language: VoyageLanguage, message: string): string => {
-  // The server's sentences reach only the crew's pages, which have two languages.
-  if (language !== "RO") {
+  if (language === "EN") {
     return message;
   }
   // Looked up as its own entry only: "constructor" is not a sentence of the server's.
-  if (Object.prototype.hasOwnProperty.call(SERVER_TEXT_RO, message)) {
+  // The server's own sentences have a Romanian version only; in German and
+  // Danish they are shown as the server wrote them.
+  if (language === "RO" && Object.prototype.hasOwnProperty.call(SERVER_TEXT_RO, message)) {
     return SERVER_TEXT_RO[message];
   }
   // Written by the page itself, in `voyageApi.ts`, when the server gave no sentence.
@@ -168,7 +166,7 @@ export const serverText = (language: VoyageLanguage, message: string): string =>
  * device in English, as `voyageOutbox.ts` wrote it, and put into words here.
  */
 export const outboxErrorText = (language: VoyageLanguage, stored: string): string => {
-  if (language !== "RO") {
+  if (language === "EN") {
     return stored;
   }
   if (stored === MESSAGES.EN["outbox.onePhoto"]) {

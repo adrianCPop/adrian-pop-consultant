@@ -403,8 +403,10 @@ describe("every text can be produced", () => {
   });
 });
 
-describe("German and Danish, for the public page", () => {
-  const publicKeys = keys.filter((key) => /^(public|common|span|duration|durationLong|language)\./.test(key));
+describe("German and Danish, for the public page and the crew's log", () => {
+  const publicKeys = keys.filter((key) =>
+    /^(public|common|span|duration|durationLong|language|log|outbox|server)\./.test(key)
+  );
 
   it.each(["DE", "DA"] as const)("%s has every message, with the same placeholders", (language) => {
     expect(Object.keys(MESSAGES[language]).sort()).toEqual([...keys].sort());
@@ -417,7 +419,7 @@ describe("German and Danish, for the public page", () => {
     expect(different).toEqual([]);
   });
 
-  it.each(["DE", "DA"] as const)("%s leaves no text of the public page in English", (language) => {
+  it.each(["DE", "DA"] as const)("%s leaves no text of those pages in English", (language) => {
     // Written the same in both languages, or a figure with its unit.
     const same = new Set<MessageKey>([
       "common.utcTime",
@@ -430,6 +432,9 @@ describe("German and Danish, for the public page", () => {
       "public.sea.ahead",
       "public.media.counter",
       "public.media.video",
+      "log.videos.badge",
+      "log.outbox.videoProgress",
+      "log.outbox.photosOnly",
     ]);
     const untranslated = publicKeys.filter(
       (key) =>
@@ -454,8 +459,14 @@ describe("German and Danish, for the public page", () => {
     expect(danish.span(86_400_000 * 2)).toBe("2 dage");
   });
 
-  it("leave the crew's pages in English", () => {
-    expect(translate("DE", "log.title")).toBe(MESSAGES.EN["log.title"]);
+  it("leave the shore controls and the server's own sentences in English", () => {
+    expect(translate("DE", "admin.title")).toBe(MESSAGES.EN["admin.title"]);
+    expect(translate("DE", "log.title")).toBe("Logbuch");
     expect(serverText("DA", "Wrong password")).toBe("Wrong password");
+    expect(serverText("DE", "The server answered 502")).toBe("Der Server hat mit 502 geantwortet");
+    expect(outboxErrorText("DA", "One video could not be sent")).toBe("En video kunne ikke sendes");
+    expect(outboxErrorText("DE", "Not accepted: that position is too old")).toBe(
+      "Nicht angenommen: that position is too old"
+    );
   });
 });
