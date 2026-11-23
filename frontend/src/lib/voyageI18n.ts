@@ -174,6 +174,9 @@ export const outboxErrorText = (language: VoyageLanguage, stored: string): strin
   if (stored === MESSAGES.EN["outbox.onePhoto"]) {
     return translate(language, "outbox.onePhoto");
   }
+  if (stored === MESSAGES.EN["outbox.oneVideo"]) {
+    return translate(language, "outbox.oneVideo");
+  }
   const refused = /^Not accepted: (.+)$/.exec(stored);
   if (refused) {
     return translate(language, "outbox.notAccepted", { reason: serverText(language, refused[1]) });

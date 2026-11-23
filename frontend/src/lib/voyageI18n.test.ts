@@ -85,6 +85,10 @@ describe("the two sets of texts", () => {
       "common.utcTime",
       "public.weather.windFrom",
       "admin.tracker.kind",
+      "public.media.counter",
+      "public.media.video",
+      "log.videos.badge",
+      "log.outbox.videoProgress",
     ]);
     const untranslated = keys.filter(
       (key) =>
@@ -424,6 +428,8 @@ describe("German and Danish, for the public page", () => {
       "span.minutes",
       "duration.days",
       "public.sea.ahead",
+      "public.media.counter",
+      "public.media.video",
     ]);
     const untranslated = publicKeys.filter(
       (key) =>

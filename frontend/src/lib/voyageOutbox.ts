@@ -4,11 +4,15 @@
  */
 import {
   ApiError,
+  finishVideo,
   isOffline,
   sendEntry,
   sendPosition,
   uploadPhoto,
+  uploadVideoPart,
+  VIDEO_PART_BYTES,
   type DevicePosition,
+  type PhotoQuality,
 } from "@/lib/voyageApi";
 
 export type OutboxStatus = "waiting" | "sent" | "failed";
@@ -22,23 +26,49 @@ export interface OutboxItem {
   title: string;
   body: string;
   position: DevicePosition | null;
+  /**
+   * The photos and videos of the entry, in order. For a correction this also
+   * names the ones the server already has; only new ones are kept on the device.
+   */
   photoIds: string[];
+  /** A correction of an entry that is already in the logbook. */
+  edit?: boolean;
   status: OutboxStatus;
   error?: string;
   sentAt?: string;
 }
 
+/** What is known of a video before it is sent, read off the file on the device. */
+export interface VideoDetails {
+  w: number;
+  h: number;
+  duration: number;
+  /** The id of the photo (in the same entry's records) shown before the video plays. */
+  posterId: string | null;
+}
+
 interface StoredPhoto {
   id: string;
   itemId: string;
-  buffer: ArrayBuffer;
+  /** A photo's bytes. A video is kept as the file itself (`blob`), which can be large. */
+  buffer?: ArrayBuffer;
+  blob?: Blob;
   type: string;
   uploaded: boolean;
+  quality?: PhotoQuality;
+  video?: VideoDetails;
+  /** A video's poster: sent as a photo, but not one of the entry's own. */
+  poster?: boolean;
+  /** How many parts of a video the server has taken so far. */
+  partsSent?: number;
 }
 
 export interface NewPhoto {
   id: string;
   blob: Blob;
+  quality?: PhotoQuality;
+  video?: VideoDetails;
+  poster?: boolean;
 }
 
 /**
@@ -181,9 +211,12 @@ export const addItem = async (item: OutboxItem, photos: NewPhoto[]): Promise<voi
     photos.map(async (photo) => ({
       id: photo.id,
       itemId: item.id,
-      buffer: await photo.blob.arrayBuffer(),
-      type: photo.blob.type || "image/jpeg",
+      ...(photo.video ? { blob: photo.blob } : { buffer: await photo.blob.arrayBuffer() }),
+      type: photo.blob.type || (photo.video ? "video/mp4" : "image/jpeg"),
       uploaded: false,
+      quality: photo.quality,
+      video: photo.video,
+      poster: photo.poster,
     }))
   );
 
@@ -287,18 +320,96 @@ let runningSince = 0;
 const isRejected = (error: unknown): error is ApiError =>
   error instanceof ApiError && [400, 409, 413, 415, 422].includes(error.status);
 
-const toBlob = (photo: StoredPhoto) => new Blob([photo.buffer], { type: photo.type });
+const toBlob = (photo: StoredPhoto) =>
+  photo.blob ?? new Blob([photo.buffer ?? new ArrayBuffer(0)], { type: photo.type });
+
+/**
+ * Send a video part by part, going on from the last part the server took.
+ * Returns the record as it stands afterwards.
+ */
+const uploadVideo = async (
+  key: string,
+  stored: StoredPhoto,
+  posterId: string | null,
+  onChange: () => void
+): Promise<StoredPhoto> => {
+  const file = toBlob(stored);
+  const parts = Math.max(1, Math.ceil(file.size / VIDEO_PART_BYTES));
+  let video = stored;
+  for (let part = video.partsSent ?? 0; part < parts; part += 1) {
+    const slice = file.slice(part * VIDEO_PART_BYTES, (part + 1) * VIDEO_PART_BYTES);
+    const answer = await uploadVideoPart(key, video.id, part, slice);
+    // A long film is still going, not stuck: another send must not start beside it.
+    runningSince = Date.now();
+    video = { ...video, partsSent: part + 1 };
+    await putPhoto(video);
+    onChange();
+    if (answer.complete) {
+      break;
+    }
+  }
+  try {
+    await finishVideo(key, video.id, {
+      parts,
+      w: video.video?.w ?? 0,
+      h: video.video?.h ?? 0,
+      duration: video.video?.duration ?? 0,
+      poster_id: posterId,
+    });
+  } catch (error) {
+    const missing = (error as ApiError | null)?.body as { missing_parts?: unknown } | null;
+    if (error instanceof ApiError && error.status === 409 && Array.isArray(missing?.missing_parts)) {
+      // The server lost some parts: start over next time, and say it is worth retrying.
+      await putPhoto({ ...video, partsSent: 0 });
+      throw new ApiError(503, "The video did not arrive whole");
+    }
+    throw error;
+  }
+  return video;
+};
+
+/** How far the videos of an entry have got, as a share from 0 to 1; null without videos. */
+export const videoProgress = async (itemId: string): Promise<number | null> => {
+  const videos = (await photosOf(itemId)).filter((photo) => photo.video);
+  if (videos.length === 0) {
+    return null;
+  }
+  let sent = 0;
+  let total = 0;
+  for (const video of videos) {
+    const parts = Math.max(1, Math.ceil(toBlob(video).size / VIDEO_PART_BYTES));
+    total += parts;
+    sent += video.uploaded ? parts : Math.min(parts, video.partsSent ?? 0);
+  }
+  return sent / total;
+};
 
 /** Upload the photos of an entry that have not gone yet. Throws when it should be retried later. */
 const uploadPhotos = async (key: string, item: OutboxItem, onChange: (id: string) => void) => {
-  for (const stored of await photosOf(item.id)) {
+  const all = await photosOf(item.id);
+  // Photos first (posters among them), so a video can name its poster when it closes.
+  const ordered = [...all.filter((photo) => !photo.video), ...all.filter((photo) => photo.video)];
+  /** A poster that was sent under a new id, by the id the video knows it by. */
+  const renamedPosters = new Map<string, string>();
+  const lostPosters = new Set<string>();
+
+  for (const stored of ordered) {
     if (stored.uploaded) {
       continue;
     }
     let photo = stored;
     try {
+      if (photo.video) {
+        const named = photo.video.posterId;
+        const posterId =
+          named && !lostPosters.has(named) ? renamedPosters.get(named) ?? named : null;
+        photo = await uploadVideo(key, photo, posterId, () => onChange(item.id));
+        await putPhoto({ ...photo, uploaded: true });
+        onChange(item.id);
+        continue;
+      }
       try {
-        await uploadPhoto(key, photo.id, toBlob(photo));
+        await uploadPhoto(key, photo.id, toBlob(photo), photo.quality);
       } catch (error) {
         if (!(error instanceof ApiError) || error.status !== 409) {
           throw error;
@@ -306,10 +417,11 @@ const uploadPhotos = async (key: string, item: OutboxItem, onChange: (id: string
         // That id belongs to an upload made with an earlier link: send it under a new one.
         const renamed = { ...photo, id: newId() };
         await putPhoto(renamed, photo.id);
+        renamedPosters.set(photo.id, renamed.id);
         item.photoIds = item.photoIds.map((id) => (id === photo.id ? renamed.id : id));
         await putItem(item);
         photo = renamed;
-        await uploadPhoto(key, photo.id, toBlob(photo));
+        await uploadPhoto(key, photo.id, toBlob(photo), photo.quality);
       }
       await putPhoto({ ...photo, uploaded: true });
     } catch (error) {
@@ -317,9 +429,16 @@ const uploadPhotos = async (key: string, item: OutboxItem, onChange: (id: string
         throw error;
       }
       // One unreadable photo should not hold back the words.
+      if (photo.poster) {
+        // A video plays without its poster; nothing to tell the writer.
+        lostPosters.add(stored.id);
+        await putPhoto({ ...photo, uploaded: true });
+        continue;
+      }
       item.photoIds = item.photoIds.filter((id) => id !== photo.id);
-      item.error = "One photo could not be sent";
+      item.error = photo.video ? "One video could not be sent" : "One photo could not be sent";
       await putItem(item);
+      await putPhoto({ ...photo, uploaded: true });
     }
     onChange(item.id);
   }
@@ -365,7 +484,7 @@ const sendAll = async (
 
       item.status = "sent";
       item.sentAt = new Date().toISOString();
-      if (item.error !== "One photo could not be sent") {
+      if (item.error !== "One photo could not be sent" && item.error !== "One video could not be sent") {
         delete item.error;
       }
       await putItem(item);
